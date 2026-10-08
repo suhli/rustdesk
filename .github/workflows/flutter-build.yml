@@ -707,6 +707,10 @@ jobs:
           name: bridge-artifact
           path: ./
 
+      - name: Build embedded Tailnet
+        # The iOS pod links the userspace Tailnet runtime, even when disabled at runtime.
+        uses: ./.github/actions/build-ios-tailnet
+
       - name: Build rustdesk lib
         run: |
           rustup target add ${{ matrix.job.target }}

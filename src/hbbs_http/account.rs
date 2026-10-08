@@ -147,6 +147,8 @@ impl OidcSession {
     }
 
     fn ensure_client(api_server: &str) {
+        #[cfg(target_os = "ios")]
+        if crate::platform::ios_tailnet::routes_api(api_server) { return; }
         let mut write_guard = OIDC_SESSION.write().unwrap();
         if write_guard.warmed_api_server.as_deref() == Some(api_server) {
             return;

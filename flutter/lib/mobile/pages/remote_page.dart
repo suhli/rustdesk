@@ -24,6 +24,9 @@ import '../../models/platform_model.dart';
 import '../../utils/image.dart';
 import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
+import '../ios/preferences.dart';
+import '../ios/orientation.dart';
+import '../ios/session_toolbar.dart';
 
 final initText = '1' * 1024;
 
@@ -66,6 +69,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Orientation? _currentOrientation;
   final _uniqueKey = UniqueKey();
   Timer? _iosKeyboardWorkaroundTimer;
+  final bool _iosToolbar = isIOS && IosPreferences.floatingToolbar;
 
   final _blockableOverlayState = BlockableOverlayState();
 
@@ -101,6 +105,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       forceRelay: widget.forceRelay,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isIOS && mounted) {
+        iosOrientation.enter().then((error) {
+          if (mounted && error != null) showToast(translate(error));
+        });
+      }
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
       gFFI.dialogManager
           .showLoading(translate('Connecting...'), onCancel: closeConnection);
@@ -142,6 +151,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   @override
   Future<void> dispose() async {
+    if (isIOS) unawaited(iosOrientation.leave());
     WidgetsBinding.instance.removeObserver(this);
     // Close the session up-front. `gFFI.close()` below only calls `sessionClose`
     // after several awaits (canvas save, image update, the `enable_soft_keyboard`
@@ -455,7 +465,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           floatingActionButtonLocation: keyboardIsVisible
               ? FABLocation(FloatingActionButtonLocation.endFloat, 0, -35)
               : null,
-          floatingActionButton: !showActionButton
+          floatingActionButton: _iosToolbar && !_showGestureHelp && !keyboardIsVisible
+              ? null
+              : !showActionButton
               ? null
               : FloatingActionButton(
                   mini: !keyboardIsVisible,
@@ -490,14 +502,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                           gFFI.ffiModel.tryShowAndroidActionsOverlay();
                           return Offstage();
                         }(),
-                  _bottomWidget(),
+                  if (!_iosToolbar || _showGestureHelp) _bottomWidget(),
                   gFFI.ffiModel.pi.isSet.isFalse
                       ? emptyOverlay(MyTheme.canvasColor)
                       : Offstage(),
                 ],
               )),
           body: Obx(
-            () => getRawPointerAndKeyBody(Overlay(
+            () => _withIosToolbar(getRawPointerAndKeyBody(Overlay(
               initialEntries: [
                 OverlayEntry(builder: (context) {
                   return Container(
@@ -529,7 +541,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                   );
                 })
               ],
-            )),
+            ))),
           )),
     );
   }
@@ -648,6 +660,31 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       ),
     );
   }
+
+  Widget _buildIosToolbar() {
+    final model = Provider.of<FfiModel>(context);
+    return IosSessionToolbar(
+      touchMode: model.touchMode,
+      keyboardEnabled: model.keyboard && !model.viewOnly && model.pi.displays.isNotEmpty,
+      close: () => clientClose(sessionId, gFFI),
+      keyboard: openKeyboard,
+      mouse: () {
+        model.toggleTouchMode();
+        bind.mainSetLocalOption(key: kOptionTouchMode, value: model.touchMode ? 'Y' : 'N');
+        showToast(translate(model.touchMode ? 'Touch mode' : 'Mouse mode'));
+      },
+      display: () => showOptions(context, widget.id, gFFI.dialogManager),
+      rotate: () async {
+        final error = await iosOrientation.rotate(MediaQuery.of(context).orientation == Orientation.portrait);
+        if (mounted && error != null) showToast(translate(error));
+      },
+      more: () => showActions(widget.id),
+      help: () => setState(() => _showGestureHelp = !_showGestureHelp),
+    );
+  }
+
+  Widget _withIosToolbar(Widget child) => _iosToolbar
+      ? Stack(children: [child, _buildIosToolbar()]) : child;
 
   bool get showCursorPaint =>
       !gFFI.ffiModel.isPeerAndroid &&

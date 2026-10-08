@@ -5,6 +5,15 @@
 
 pub use hbb_common::config::keys::*;
 
+pub const OPTION_IOS_TAILNET_ENABLED: &str = "ios-tailnet-enabled";
+pub const OPTION_IOS_TAILNET_API: &str = "ios-tailnet-api";
+pub const OPTION_IOS_TAILNET_ID: &str = "ios-tailnet-id";
+pub const OPTION_IOS_TAILNET_RELAY: &str = "ios-tailnet-relay";
+pub const OPTION_IOS_TAILNET_FALLBACK: &str = "ios-tailnet-fallback";
+pub const OPTION_IOS_TAILNET_API_ALTERNATE: &str = "ios-tailnet-api-alternate";
+pub const OPTION_IOS_TAILNET_ID_ALTERNATE: &str = "ios-tailnet-id-alternate";
+pub const OPTION_IOS_TAILNET_RELAY_ALTERNATE: &str = "ios-tailnet-relay-alternate";
+
 pub const OPTION_VIEW_ONLY: &str = "view_only";
 pub const OPTION_SHOW_MONITORS_TOOLBAR: &str = "show_monitors_toolbar";
 pub const OPTION_SHOW_REMOTE_CURSOR: &str = "show_remote_cursor";

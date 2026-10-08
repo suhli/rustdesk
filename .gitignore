@@ -58,3 +58,6 @@ libsciter.dylib
 flutter/web/
 # libdrmtap is cloned at build time by build.py (not a submodule)
 /third_party/libdrmtap/
+/flutter/ios/IosEnhancements/libEmbeddedTailnet.a
+/flutter/ios/IosEnhancements/libEmbeddedTailnet.h
+/flutter/ios/IosEnhancements/THIRD-PARTY-NOTICES.txt

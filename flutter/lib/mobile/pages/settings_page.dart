@@ -21,6 +21,7 @@ import '../widgets/deploy_dialog.dart';
 import '../widgets/dialog.dart';
 import 'home_page.dart';
 import 'scan_page.dart';
+import '../ios/settings.dart';
 
 class SettingsPage extends StatefulWidget implements PageShape {
   @override
@@ -718,6 +719,13 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
     final settings = SettingsList(
       sections: [
         customClientSection,
+        if (isIOS && !disabledSettings)
+          SettingsSection(title: Text(translate('Remote control')), tiles: [
+            SettingsTile(title: Text(translate('iOS enhancements')),
+              leading: const Icon(Icons.phone_iphone),
+              onPressed: (context) => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const IosSettingsPage()))),
+          ]),
         if (!bind.isDisableAccount())
           SettingsSection(
             title: Text(translate('Account')),

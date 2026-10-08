@@ -598,6 +598,8 @@ impl Client {
     /// Relay-only ICE can then gather nothing. WebSocket does not: it tunnels only the signaling
     /// and relay legs, so the offer keeps full ICE and direct is exactly what it is there for.
     fn should_create_webrtc_offerer(interface: &impl Interface) -> bool {
+        #[cfg(target_os = "ios")]
+        if crate::platform::ios_tailnet::id_enabled() { return false; }
         if !crate::get_webrtc_enabled() {
             return false;
         }
@@ -810,6 +812,8 @@ impl Client {
         // the outer select_ok closes its pc instead of leaking it in SESSIONS. Disarmed via
         // into_inner() once the stream is adopted into a connection attempt.
         let mut webrtc_offerer = webrtc_offerer.map(OffererGuard::new);
+        #[cfg(target_os = "ios")]
+        use crate::platform::ios_tailnet::connect_id as connect_tcp;
         let mut start = Instant::now();
         let mut socket = connect_tcp(&*rendezvous_server, CONNECT_TIMEOUT).await;
         debug_assert!(!servers.contains(&rendezvous_server));
@@ -1786,6 +1790,8 @@ impl Client {
         switch_code: &str,
     ) -> ResultType<Stream> {
         let mut succeed = false;
+        #[cfg(target_os = "ios")]
+        use crate::platform::ios_tailnet::connect_id as connect_tcp;
         let mut uuid = "".to_owned();
         let mut ipv4 = true;
 
@@ -1848,6 +1854,8 @@ impl Client {
         conn_type: ConnType,
         ipv4: bool,
     ) -> ResultType<Stream> {
+        #[cfg(target_os = "ios")]
+        use crate::platform::ios_tailnet::connect_relay as connect_tcp;
         let mut conn = connect_tcp(
             ipv4_to_ipv6(check_port(relay_server, RELAY_PORT), ipv4),
             CONNECT_TIMEOUT,
@@ -3004,6 +3012,8 @@ impl LoginConfigHandler {
             config::option2bool("force-always-relay", &self.get_option("force-always-relay"))
                 || force_relay;
         self.policy_relay = self.peer_relay || Config::is_proxy();
+        #[cfg(target_os = "ios")]
+        if crate::platform::ios_tailnet::id_enabled() { self.policy_relay = true; }
         self.force_relay = self.policy_relay || use_ws();
         if let Some((real_id, server, key)) = &self.other_server {
             let other_server_key = self.get_option("other-server-key");
@@ -5242,6 +5252,8 @@ async fn hc_connection_(
     mut rx: UnboundedReceiver<()>,
     token: String,
 ) -> ResultType<()> {
+    #[cfg(target_os = "ios")]
+    use crate::platform::ios_tailnet::connect_id as connect_tcp;
     let mut timer = crate::rustdesk_interval(interval(crate::TIMER_OUT));
     let mut last_recv_msg = Instant::now();
     let mut keep_alive = crate::DEFAULT_KEEP_ALIVE;
@@ -5325,6 +5337,8 @@ pub mod peer_online {
     }
 
     async fn create_online_stream() -> ResultType<Stream> {
+        #[cfg(target_os = "ios")]
+        use crate::platform::ios_tailnet::connect_online as connect_tcp;
         let (rendezvous_server, _servers, _contained) =
             crate::get_rendezvous_server(READ_TIMEOUT).await;
         let tmp: Vec<&str> = rendezvous_server.split(":").collect();

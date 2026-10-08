@@ -8,6 +8,9 @@ pub use windows::*;
 #[cfg(windows)]
 pub mod windows;
 
+#[cfg(target_os = "ios")]
+pub mod ios_tailnet;
+
 #[cfg(windows)]
 pub mod win_device;
 

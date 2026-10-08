@@ -8,6 +8,8 @@ import '../../common/widgets/chat_page.dart';
 import '../../models/platform_model.dart';
 import '../../models/state_model.dart';
 import 'connection_page.dart';
+import '../ios/orientation.dart';
+import '../ios/tailnet.dart';
 
 abstract class PageShape extends Widget {
   final String title = "";
@@ -43,6 +45,10 @@ class HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     initPages();
+    if (isIOS) {
+      EmbeddedTailnet.instance.initialize();
+      WidgetsBinding.instance.addPostFrameCallback((_) => iosOrientation.home());
+    }
   }
 
   void initPages() {

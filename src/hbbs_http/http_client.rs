@@ -276,6 +276,8 @@ pub async fn create_http_client_async_with_url(url: &str) -> AsyncClient {
 }
 
 pub async fn create_http_client_async_with_url_strict(url: &str) -> ResultType<AsyncClient> {
+    #[cfg(target_os = "ios")]
+    if crate::platform::ios_tailnet::routes_api(url) { return crate::platform::ios_tailnet::http_client(url); }
     let parsed_url = url::Url::parse(url)?;
     if parsed_url.scheme() != "https" {
         bail!("Strict HTTP client requires HTTPS: {}", url);

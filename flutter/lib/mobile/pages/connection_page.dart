@@ -17,6 +17,8 @@ import '../../consts.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import 'home_page.dart';
+import '../ios/device_home.dart';
+import '../ios/preferences.dart';
 
 /// Connection page for connecting to a remote peer.
 class ConnectionPage extends StatefulWidget implements PageShape {
@@ -80,6 +82,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
   @override
   Widget build(BuildContext context) {
     Provider.of<FfiModel>(context);
+    if (isIOS && IosPreferences.enhancedHome) {
+      return IosDeviceHome(connectionEntry: _buildRemoteIDTextField())
+          .marginSymmetric(horizontal: 12);
+    }
     return CustomScrollView(
       slivers: [
         SliverList(

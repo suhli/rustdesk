@@ -1,0 +1,138 @@
+name: iOS Enhanced
+
+on:
+  workflow_dispatch:
+    inputs:
+      signing:
+        description: 'unsigned validates compilation; other modes require Apple signing secrets'
+        type: choice
+        options: [unsigned, development, ad-hoc, app-store]
+        default: unsigned
+      bundle_id:
+        description: 'Your independent app identifier (must match the profile for signing)'
+        type: string
+        default: org.rustdesk.enhanced.ios
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-enhanced-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bridge:
+    uses: ./.github/workflows/bridge.yml
+  ios:
+    needs: bridge
+    runs-on: macos-15
+    timeout-minutes: 180
+    env:
+      VCPKG_BINARY_SOURCES: 'clear;x-gha,readwrite'
+      SIGNING_MODE: ${{ inputs.signing }}
+      IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID || inputs.bundle_id }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          submodules: recursive
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          xcodebuild -version
+      - name: Native prerequisites
+        run: brew install nasm yasm
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+      - name: Apply upstream Flutter patch
+        run: |
+          cd "$(dirname "$(dirname "$(which flutter)")")"
+          git apply "${GITHUB_WORKSPACE}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff"
+      - name: Export native cache credentials
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+      - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
+        with:
+          vcpkgGitCommitId: '9e593bb18ea69cc5095e012465dcd675a822ed0d'
+          doNotCache: false
+      - name: Build upstream native dependencies
+        run: '$VCPKG_ROOT/vcpkg install --triplet arm64-ios --x-install-root="$VCPKG_ROOT/installed"'
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
+        with:
+          toolchain: '1.75'
+          targets: aarch64-apple-ios
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          prefix-key: ios-enhanced
+          key: arm64-ios
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: bridge-artifact
+          path: ./
+      - uses: ./.github/actions/build-ios-tailnet
+      - name: Build Rust core
+        run: cargo build --locked --features flutter,hwcodec --release --target aarch64-apple-ios --lib
+      - name: Flutter dependencies and tests
+        working-directory: flutter
+        run: |
+          flutter pub get
+          flutter test --no-pub test/ios_orientation_test.dart
+          flutter analyze --no-pub --no-fatal-infos lib/mobile/ios test/ios_orientation_test.dart
+      - name: Configure independent identity and icon
+        run: |
+          python3 scripts/ios_identity.py
+          swift scripts/ios_icon.swift
+      - name: Import certificate
+        if: inputs.signing != 'unsigned'
+        uses: apple-actions/import-codesign-certs@253ddeeac23f2bdad1646faac5c8c2832e800071
+        with:
+          p12-file-base64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          keychain: rustdesk-ios
+      - name: Install profile and configure signing
+        if: inputs.signing != 'unsigned'
+        env:
+          IOS_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          test -n "$APPLE_TEAM_ID"
+          test -n "$IOS_PROFILE_BASE64"
+          printf '%s' "$IOS_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/ios-profile.mobileprovision"
+          security cms -D -i "$RUNNER_TEMP/ios-profile.mobileprovision" > "$RUNNER_TEMP/ios-profile.plist"
+          python3 scripts/ios_signing.py
+      - name: Archive unsigned application
+        if: inputs.signing == 'unsigned'
+        working-directory: flutter
+        run: |
+          flutter build ipa --release --no-codesign --build-number="$GITHUB_RUN_NUMBER"
+          test -d build/ios/archive/Runner.xcarchive
+          ditto -c -k --sequesterRsrc --keepParent build/ios/archive/Runner.xcarchive build/ios/unsigned-xcarchive.zip
+      - name: Archive and export signed IPA
+        if: inputs.signing != 'unsigned'
+        working-directory: flutter
+        run: |
+          flutter build ipa --release --export-options-plist="$RUNNER_TEMP/ExportOptions.plist" --build-number="$GITHUB_RUN_NUMBER"
+          test -d build/ios/archive/Runner.xcarchive
+          codesign --verify --deep --strict build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+          test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ios-enhanced-${{ inputs.signing }}
+          if-no-files-found: error
+          path: |
+            flutter/build/ios/unsigned-xcarchive.zip
+            flutter/build/ios/ipa/*.ipa
+            flutter/ios/IosEnhancements/THIRD-PARTY-NOTICES.txt
+            LICENCE
+          retention-days: 14
+      - name: Remove signing material
+        if: always() && inputs.signing != 'unsigned'
+        run: |
+          security delete-keychain rustdesk-ios.keychain || true
+          python3 scripts/ios_signing.py --clean

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:http/http.dart' as http;
 import '../models/platform_model.dart';
+import '../mobile/ios/tailnet.dart';
 import 'package:flutter_hbb/common.dart';
 export 'package:http/http.dart' show Response;
 
@@ -28,6 +29,7 @@ class HttpService {
           !(enableFlutterHttpOnRust || await bind.mainGetProxyStatus());
     }
 
+    if (isIOS && EmbeddedTailnet.instance.routesApi(url)) useFlutterHttp = false;
     if (useFlutterHttp) {
       return await _pollFlutterHttp(url, method, headers: headers, body: body);
     }

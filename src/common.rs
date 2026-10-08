@@ -660,6 +660,8 @@ impl Drop for CheckTestNatType {
 }
 
 pub fn test_nat_type() {
+    #[cfg(target_os = "ios")]
+    if crate::platform::ios_tailnet::id_enabled() { return; }
     test_ipv6_sync();
     use std::sync::atomic::{AtomicBool, Ordering};
     std::thread::spawn(move || {
@@ -703,6 +705,8 @@ pub fn test_nat_type() {
 
 #[tokio::main(flavor = "current_thread")]
 async fn test_nat_type_() -> ResultType<bool> {
+    #[cfg(target_os = "ios")]
+    if crate::platform::ios_tailnet::id_enabled() { return Ok(true); }
     log::info!("Testing nat ...");
     let start = std::time::Instant::now();
     let server1 = Config::get_rendezvous_server();
@@ -844,6 +848,8 @@ async fn test_rendezvous_server_() {
 }
 
 pub fn test_rendezvous_server() {
+    #[cfg(target_os = "ios")]
+    if crate::platform::ios_tailnet::id_enabled() { return; }
     std::thread::spawn(test_rendezvous_server_);
 }
 
@@ -1234,6 +1240,8 @@ pub fn get_audit_server(api: String, custom: String, typ: String) -> String {
 /// and the target URL belongs to the configured non-public API host.
 #[inline]
 fn should_use_raw_tcp_for_api(url: &str) -> bool {
+    #[cfg(target_os = "ios")]
+    if crate::platform::ios_tailnet::routes_api(url) { return false; }
     get_builtin_option(keys::OPTION_USE_RAW_TCP_FOR_API) == "Y"
         && !use_ws()
         && is_tcp_proxy_api_target(url)
@@ -1242,6 +1250,8 @@ fn should_use_raw_tcp_for_api(url: &str) -> bool {
 /// Check if we can attempt raw TCP proxy fallback for this target URL.
 #[inline]
 fn can_fallback_to_raw_tcp(url: &str) -> bool {
+    #[cfg(target_os = "ios")]
+    if crate::platform::ios_tailnet::routes_api(url) { return false; }
     !use_ws() && is_tcp_proxy_api_target(url)
 }
 
@@ -1611,6 +1621,11 @@ async fn post_request_(
     danger_accept_invalid_cert: Option<bool>,
     original_danger_accept_invalid_cert: Option<bool>,
 ) -> ResultType<reqwest::Response> {
+    #[cfg(target_os = "ios")]
+    if crate::platform::ios_tailnet::routes_api(url) {
+        let headers = parse_simple_header(header).into_iter().map(|entry| (entry.name, entry.value));
+        return crate::platform::ios_tailnet::request(url, "POST", Some(body), headers).await;
+    }
     let mut req = create_http_client_async(
         tls_type.unwrap_or(TlsType::Rustls),
         danger_accept_invalid_cert.unwrap_or(false),
@@ -1711,6 +1726,11 @@ async fn get_http_response_async(
     danger_accept_invalid_cert: Option<bool>,
     original_danger_accept_invalid_cert: Option<bool>,
 ) -> ResultType<reqwest::Response> {
+    #[cfg(target_os = "ios")]
+    if crate::platform::ios_tailnet::routes_api(url) {
+        let headers = parse_json_header_entries(header)?.into_iter().map(|entry| (entry.name, entry.value));
+        return crate::platform::ios_tailnet::request(url, &method.to_ascii_uppercase(), body, headers).await;
+    }
     let http_client = create_http_client_async(
         tls_type.unwrap_or(TlsType::Rustls),
         danger_accept_invalid_cert.unwrap_or(false),

@@ -1,5 +1,6 @@
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
+import '../../mobile/ios/preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -76,7 +77,13 @@ class _PeerCardState extends State<_PeerCard>
             }
           }
         },
-        onLongPress: () => peerTabModel.select(peer),
+        onLongPressStart: isIOS && IosPreferences.enhancedHome ? (event) {
+          final p = event.globalPosition;
+          _menuPos = RelativeRect.fromLTRB(p.dx, p.dy, p.dx, p.dy);
+          _showPeerMenu(peer.id);
+        } : null,
+        onLongPress: isIOS && IosPreferences.enhancedHome
+            ? null : () => peerTabModel.select(peer),
         child: child);
   }
 

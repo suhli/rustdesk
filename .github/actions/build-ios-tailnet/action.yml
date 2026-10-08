@@ -1,0 +1,15 @@
+name: Build embedded iOS Tailnet
+description: Compile the pinned tsnet userspace runtime for an ARM64 iOS device
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.26.5'
+        cache-dependency-path: libs/ios_tailnet/go.sum
+    - name: Test and build tsnet
+      shell: bash
+      run: |
+        cd libs/ios_tailnet
+        go test -mod=readonly ./...
+        bash build-ios.sh
