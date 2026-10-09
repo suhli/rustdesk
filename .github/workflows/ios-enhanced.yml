@@ -51,7 +51,12 @@ jobs:
       - name: Apply upstream Flutter patch
         run: |
           cd "$(dirname "$(dirname "$(which flutter)")")"
-          git apply "${GITHUB_WORKSPACE}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff"
+          patch="${GITHUB_WORKSPACE}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff"
+          if git apply --reverse --check "$patch" 2>/dev/null; then
+            echo "Flutter dropdown patch already applied; reusing cached SDK."
+          else
+            git apply "$patch"
+          fi
       - name: Export native cache credentials
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
         with:
