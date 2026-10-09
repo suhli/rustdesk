@@ -76,9 +76,11 @@ Profile 必须与签名模式、证书及目标设备相符。Development/Ad Hoc
 
 macOS 本地构建（先按仓库现有流程安装 vcpkg 依赖并生成 bridge）：
 
+iOS 只生成 Rust 静态库，由 Xcode 将 `liblibrustdesk.a` 与 CocoaPods 提供的 Go 静态库 `libEmbeddedTailnet.a` 一起链接。使用下方的 `cargo rustc --crate-type staticlib`；普通 `cargo build --lib` 还会按共享 manifest 生成动态库，在 Go 库尚未参与链接时因缺少 `_rd_tailnet_port` 而失败。
+
 ```sh
 bash libs/ios_tailnet/build-ios.sh
-cargo build --locked --features flutter,hwcodec --release --target aarch64-apple-ios --lib
+cargo rustc --locked --features flutter,hwcodec --release --target aarch64-apple-ios --lib --crate-type staticlib
 export IOS_BUNDLE_ID=org.example.rustdesk.enhanced
 python3 scripts/ios_identity.py
 swift scripts/ios_icon.swift

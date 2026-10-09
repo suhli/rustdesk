@@ -78,7 +78,8 @@ jobs:
           path: ./
       - uses: ./.github/actions/build-ios-tailnet
       - name: Build Rust core
-        run: cargo build --locked --features flutter,hwcodec --release --target aarch64-apple-ios --lib
+        # Xcode links the Rust and Go archives together; a standalone dylib cannot resolve rd_tailnet_port.
+        run: cargo rustc --locked --features flutter,hwcodec --release --target aarch64-apple-ios --lib --crate-type staticlib
       - name: Flutter dependencies and tests
         working-directory: flutter
         run: |

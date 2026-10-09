@@ -714,7 +714,8 @@ jobs:
       - name: Build rustdesk lib
         run: |
           rustup target add ${{ matrix.job.target }}
-          cargo build --locked --features flutter,hwcodec --release --target aarch64-apple-ios --lib
+          # Xcode links the Rust and Go archives together; a standalone dylib cannot resolve rd_tailnet_port.
+          cargo rustc --locked --features flutter,hwcodec --release --target aarch64-apple-ios --lib --crate-type staticlib
           
       - name: Upload liblibrustdesk.a Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
