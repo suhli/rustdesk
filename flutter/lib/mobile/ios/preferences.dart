@@ -5,6 +5,7 @@ export 'orientation_policy.dart' show RemoteOrientation;
 class IosPreferences {
   static bool get enhancedHome => read('home') != 'N';
   static bool get floatingToolbar => read('toolbar') != 'N';
+  static bool get canvasGestures => read('canvas-gestures') != 'N';
   static bool get autoConnect => read('tailnet-auto') != 'N';
   static bool get authorized => read('tailnet-authorized') == 'Y';
   static RemoteOrientation get orientation => RemoteOrientation.values

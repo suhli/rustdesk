@@ -25,6 +25,21 @@ void main() {
     binding.defaultBinaryMessenger.setMockMethodCallHandler(launcher, null);
   });
 
+  test('home status distinguishes connection and authorization states', () {
+    for (final entry in {
+      'Starting': 'Connecting...',
+      'NoState': 'Connecting...',
+      'Running': 'Connected',
+      'NeedsLogin': 'Authorization required',
+      'NeedsMachineAuth': 'Approve this device on your control server',
+      'Failed': 'Connection failed',
+      'Stopped': 'Not connected',
+    }.entries) {
+      tailnet.state = entry.key;
+      expect(tailnet.statusLabel, entry.value);
+    }
+  });
+
   test('authorization opens a Headscale link that arrives after the click',
       () async {
     var reads = 0;

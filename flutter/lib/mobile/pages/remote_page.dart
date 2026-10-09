@@ -104,6 +104,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       isSharedPassword: widget.isSharedPassword,
       forceRelay: widget.forceRelay,
     );
+    if (isIOS) gFFI.canvasModel.setLocked(!IosPreferences.canvasGestures);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (isIOS && mounted) {
         iosOrientation.enter().then((error) {
@@ -1313,7 +1314,18 @@ void showOptions(
   List<TToggleMenu> cursorToggles = await toolbarCursor(context, id, gFFI);
   List<TToggleMenu> displayToggles =
       await toolbarDisplayToggle(context, id, gFFI);
-  if (isMobile) {
+  if (isIOS) {
+    displayToggles.insert(
+        0,
+        TToggleMenu(
+            child: Text(translate('Pinch to zoom and pan canvas')),
+            value: !gFFI.canvasModel.locked,
+            onChanged: (value) async {
+              gFFI.canvasModel.setLocked(value != true);
+              await IosPreferences.write(
+                  'canvas-gestures', value == true ? 'Y' : 'N');
+            }));
+  } else if (isMobile) {
     displayToggles.insert(
         0,
         TToggleMenu(

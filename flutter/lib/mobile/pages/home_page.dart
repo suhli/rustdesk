@@ -10,6 +10,7 @@ import '../../models/state_model.dart';
 import 'connection_page.dart';
 import '../ios/orientation.dart';
 import '../ios/tailnet.dart';
+import '../ios/tailnet_status.dart';
 
 abstract class PageShape extends Widget {
   final String title = "";
@@ -108,7 +109,12 @@ class HomePageState extends State<HomePage> {
               }
             }),
           ),
-          body: _pages.elementAt(_selectedIndex),
+          body: isIOS && _pages.elementAt(_selectedIndex) is ConnectionPage
+              ? Column(children: [
+                  const IosTailnetStatus(),
+                  Expanded(child: _pages.elementAt(_selectedIndex)),
+                ])
+              : _pages.elementAt(_selectedIndex),
         ));
   }
 

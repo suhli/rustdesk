@@ -52,6 +52,25 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
       _foreground = true;
   Timer? _poll;
 
+  String get statusLabel {
+    if (!enabled) return 'Not enabled';
+    switch (state) {
+      case 'Running':
+        return 'Connected';
+      case 'NeedsLogin':
+        return 'Authorization required';
+      case 'NeedsMachineAuth':
+        return 'Approve this device on your control server';
+      case 'Starting':
+      case 'NoState':
+        return 'Connecting...';
+      case 'Failed':
+        return 'Connection failed';
+      default:
+        return 'Not connected';
+    }
+  }
+
   Uri? get authorizationUri {
     final uri = Uri.tryParse(_authUrl);
     if (uri == null ||

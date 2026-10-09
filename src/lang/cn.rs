@@ -844,5 +844,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Approve this device on your control server", "请在控制服务器上批准此设备"),
         ("Enter an HTTP or HTTPS control server URL without credentials, query or fragment.", "请输入 HTTP 或 HTTPS 控制服务器地址，不要包含账号密码、查询参数或片段。"),
         ("No authorization link received. Check the control server address and network, then retry.", "未收到授权链接，请检查控制服务器地址和网络后重试。"),
+        ("Pinch to zoom and pan canvas", "双指缩放和拖动画布"),
+        ("Not connected", "未连接"),
     ].iter().cloned().collect();
 }
