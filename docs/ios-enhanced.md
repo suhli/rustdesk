@@ -14,7 +14,15 @@
 - 启动时自动连接：默认开启，仅在总开关开启且已授权时自动恢复。首次安装不会弹出 Tailnet 登录。
 - Console API 使用 Tailscale：默认开启，但仅随总开关生效。ID、Relay 的 Tailscale 路由默认关闭，分别控制。
 
-首次使用时先明确配置 API 地址，再打开内嵌 Tailscale。点击“授权”，使用系统浏览器登录；如果授权地址尚未生成，等待状态变为“需要授权”后再次点击。授权后手动返回应用即可恢复状态检查，不依赖自定义 URL 回调。若 Tailnet 启用了设备审批，还需在其管理控制台批准这个独立节点。
+首次使用时先明确配置 API 地址，再打开内嵌 Tailscale。点击“授权”后会等待控制服务器生成授权链接（最多约 30 秒），并打开系统浏览器；等待期间显示进度，超时会提示检查控制服务器和网络。已有节点正在注册时不会因重复点击重启节点。如果系统或 LiveContainer 无法打开浏览器，可点击“复制授权链接”后手动在 Safari 打开。授权后手动返回应用即可恢复状态检查，不依赖自定义 URL 回调。若 Tailnet 启用了设备审批，还需在其管理控制台批准这个独立节点。
+
+使用 Headscale 时，在“iOS 增强功能 → Tailscale / Headscale 控制服务器”填写其对外服务地址，例如 `https://headscale.example.com`；此地址用于节点注册，与 RustDesk 的 API/ID/中继服务器地址分别配置。留空使用官方 Tailscale。控制服务器必须在节点尚未连入 Tailnet 时就能从手机访问，HTTPS 使用系统信任的证书；也支持明确配置的 HTTP Headscale 地址。更改控制服务器的对话框会提示清除本应用当前节点身份，保存后需要重新授权，以免把原有身份用于另一个控制服务器。服务器端旧节点需自行管理。
+
+Headscale 授权页面可能显示管理员注册命令，也可能跳转到部署者配置的 OIDC 登录；按该页面和当前 Headscale 版本完成注册，再返回应用。参见 [Headscale 注册说明](https://headscale.net/stable/ref/registration/)。当前没有增加 Auth Key 输入或跳过 TLS 验证。
+
+节点由本应用在授权后加入所登录的 Tailnet，配置的主机名为 `rustdesk-ios`，无需手动填写节点 IP。旧版本在授权前可能显示 SDK 返回的系统主机名 `localhost`；这不是远端服务器地址，也不代表已经连接。现在授权前显示配置的节点名，获得网络信息后再显示实际节点名称和 Tailscale IP。
+
+服务地址仍在“设置 → ID/中继服务器”里配置，填写对应服务器的 Tailscale IP 或 MagicDNS 名称和实际端口。API 地址需要带 `http://` 或 `https://`，例如 `http://100.101.102.103:21114`（示例地址，需替换）；不要填写本机的 `localhost`。仅 Console/API 位于 Tailnet 时，只开启“Console API 使用 Tailscale”；ID/中继也位于 Tailnet 时再开启各自的分流。首次授权使用“授权”，只有要丢弃现有身份、重新注册时才使用“授权新节点”。
 
 已连接时显示节点名称、Tailscale IP，并自动进行一次 API 检查；也可手动重试。检查调用 `/api/login-options`，不带账号凭据。HTTP 4xx 表示服务器可达，不代表接口或账号认证成功；随后仍需通过原有账号登录、地址簿同步验证兼容性。
 
@@ -58,9 +66,11 @@ Flutter 先设置允许的方向，Swift 再从当前 Flutter 控制器所在的
 
 如果 Actions 页面没有工作流，先检查 Fork 是否已启用 Actions。手动运行的工作流文件必须先存在于仓库默认分支；仅推送到功能分支不会建立该手动入口。可以把增强分支设为此 Fork 的默认分支，或将工作流及其依赖合入默认分支，然后在 `iOS Enhanced → Run workflow` 中选择要构建的分支。参见 [GitHub 手动运行工作流说明](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)。
 
-- `unsigned`：执行原生依赖、Go、Rust、Flutter 测试和 archive 构建，将归档中的 `Runner.app` 按 `Payload/Runner.app` 结构打包成 `RustDesk-Enhanced-unsigned.ipa`，同时保留 `unsigned-xcarchive.zip`。在构建产物 `ios-enhanced-unsigned` 中解压找到 `.ipa`，可用于 LiveContainer 导入或后续重签名；不需要配置 Apple 签名 Secrets。它不能直接通过 iOS 的普通安装流程安装，LiveContainer 内的实际运行兼容性仍待真机验证。
+- `unsigned`：执行原生依赖、Go、Rust、Flutter 测试和 archive 构建，将归档中的 `Runner.app` 按 `Payload/Runner.app` 结构打包成 `RustDesk-Enhanced-unsigned.ipa`。在构建产物 `ios-enhanced-unsigned` 中解压找到 `.ipa`，可用于 LiveContainer 导入或后续重签名；不需要配置 Apple 签名 Secrets。它不能直接通过 iOS 的普通安装流程安装，LiveContainer 内的实际运行兼容性仍待真机验证。
 - `development` / `ad-hoc` / `app-store`：导入证书、核验 profile 的 Team ID 和显式 Bundle ID、手动签名、导出 IPA、检查归档签名和 IPA 是否存在。签名材料在结束时清理。
 - `app-store` 导出仅表示生成供上传的签名包；没有自动上传、App Store 审核或分发保证。上传要求可能需要更新 Xcode/SDK，需单独验证。
+
+所有签名模式的最终 `ios-enhanced-*` artifact 只包含 IPA，不压缩上传 Xcode 归档或单独的许可证文件；许可证和第三方声明作为应用资源包含在 IPA 中。工作流依赖的 bridge artifact 仍用于各构建任务之间传递生成代码。
 
 签名模式需配置仓库 Secrets：
 
@@ -86,7 +96,7 @@ python3 scripts/ios_identity.py
 swift scripts/ios_icon.swift
 cd flutter
 flutter pub get
-flutter test --no-pub test/ios_orientation_test.dart
+flutter test --no-pub test/ios_orientation_test.dart test/ios_tailnet_test.dart
 flutter build ipa --release --no-codesign
 ```
 
@@ -96,11 +106,13 @@ flutter build ipa --release --no-codesign
 
 Windows 上已运行 Go 模块的身份恢复/篡改拒绝、代理目标白名单、响应和认证头保留、私有名称解析隔离、缺失 Tailnet 路由拒绝测试。Flutter 有 3 个方向策略测试，覆盖 iPhone 进入/退出、iPad/跟随系统、竖屏/手动模式。
 
+Headscale 改动补充了无效控制地址拒绝的 Go 测试，以及延迟授权链接、浏览器打开失败后保留复制链接、控制地址校验的 Flutter 回归测试。Go 测试和 Dart 静态分析已通过；完整 Flutter 授权测试需要 CI 的 Flutter 3.24.5，本机 3.35.6 与项目既有 `extended_text` 依赖不兼容，未标记为通过。真实 Headscale 注册及 LiveContainer 浏览器跳转仍需安装新 IPA 验证。
+
 静态分析仅覆盖本次新增模块及改动的 Dart 文件，不等同于整个 Flutter 应用或 iOS 原生构建。本机 Flutter 为 3.35.6/Dart 3.9.2；CI 保留上游 3.24.5，因此还需要 CI 验证。当前环境没有 Xcode 和 iPhone：Swift/Go iOS 链接、IPA 签名、真实 Tailnet 登录、第三方 Console 与 secure TCP 的端到端连接、真机旋转和触摸均未标记为通过。
 
 ### 真机验收步骤（待执行）
 
-1. 先跑 unsigned CI，将产物中的 `RustDesk-Enhanced-unsigned.ipa` 导入已配置好的 LiveContainer 并验证启动；`.xcarchive.zip` 是归档，不是导入文件。若使用普通安装流程，先配置签名，再使用 Xcode 的 Devices and Simulators 安装 Development/Ad Hoc IPA，或通过相应受支持的分发渠道安装。
+1. 先跑 unsigned CI，将产物中的 `RustDesk-Enhanced-unsigned.ipa` 导入已配置好的 LiveContainer 并验证启动。若使用普通安装流程，先配置签名，再使用 Xcode 的 Devices and Simulators 安装 Development/Ad Hoc IPA，或通过相应受支持的分发渠道安装。
 2. 干净安装，保持 Tailnet 关闭：确认无额外授权/节点创建；测试官方或自建 ID/Relay、账号登录和远程控制。分别关闭首页和工具栏增强，确认原路径可用。
 3. 配置自己的 API、ID、Relay、Server Key。仅开启 API 分流，浏览器授权后返回应用；测试第三方 Console 登录、地址簿拉取、设备连接和 Token 失效。ID/Relay 保持公网访问，检查 secure TCP / KeyExchange 仍能协商。
 4. 断开内嵌节点，确认私有 API 报错且不会经公网 ID 代理发送；开启明确的备用地址后才允许使用备用。配置错误证书/Server Key 时必须失败。
@@ -144,6 +156,6 @@ Windows 上已运行 Go 模块的身份恢复/篡改拒绝、代理目标白名�
 
 ## 许可证与发布
 
-保留根目录 `LICENCE`、版权声明和修改说明。RustDesk 使用 AGPL-3.0；分发修改版时应随版本提供相应源码和许可证，并按适用条款处理网络交互下的源码提供。`scripts/ios_licenses.py` 从实际链接的 Go 包收集 Tailscale 的 BSD-3-Clause 和传递依赖声明，生成 `THIRD-PARTY-NOTICES.txt`，随 pod 资源及构建产物一起分发；缺失模块许可证时构建会失败，需审查后才能发布。没有复制 VoidLink 的代码、UI 素材或品牌资源。
+保留根目录 `LICENCE`、版权声明和修改说明。RustDesk 使用 AGPL-3.0；分发修改版时应随版本提供相应源码和许可证，并按适用条款处理网络交互下的源码提供。`scripts/ios_licenses.py` 合并根目录 `LICENCE`、Go runtime 许可证以及实际链接的 Go 包的 Tailscale BSD-3-Clause 和传递依赖声明，生成 `THIRD-PARTY-NOTICES.txt`，通过 pod 资源包含在 IPA 中；缺失模块许可证时构建会失败，需审查后才能发布。没有复制 VoidLink 的代码、UI 素材或品牌资源。
 
 参考：[官方 tsnet](https://tailscale.com/docs/features/tsnet)、[社区 Flutter SDK](https://pub.dev/packages/tailscale)、[UIKit 场景方向请求](https://developer.apple.com/documentation/uikit/uiwindowscene/requestgeometryupdate(_:errorhandler:))、[GitHub macOS 15 构建镜像](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)。

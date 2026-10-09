@@ -836,6 +836,14 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("iOS did not rotate the window. Unlock orientation in Control Center, then use Rotate screen.", ""),
         ("iOS enhancements", ""),
         ("iOS refused the rotation. Use Rotate screen again, or unlock orientation in Control Center.", ""),
+        ("Tailscale / Headscale control server", ""),
+        ("Leave empty for official Tailscale. For Headscale, enter its server URL.", ""),
+        ("Changing the control server clears this app’s saved Tailscale identity and requires authorization again.", ""),
+        ("Official Tailscale", ""),
+        ("Copy authorization link", ""),
+        ("Approve this device on your control server", ""),
+        ("Enter an HTTP or HTTPS control server URL without credentials, query or fragment.", ""),
+        ("No authorization link received. Check the control server address and network, then retry.", ""),
     ].iter().cloned().collect();
 }
 

@@ -14,6 +14,17 @@ const tailnetIdKey = 'ios-tailnet-id';
 const tailnetRelayKey = 'ios-tailnet-relay';
 const tailnetFallbackKey = 'ios-tailnet-fallback';
 
+bool validTailnetControlUrl(String value) {
+  if (value.isEmpty) return true;
+  final uri = Uri.tryParse(value);
+  return uri != null &&
+      (uri.scheme == 'http' || uri.scheme == 'https') &&
+      uri.host.isNotEmpty &&
+      uri.userInfo.isEmpty &&
+      !uri.hasQuery &&
+      !uri.hasFragment;
+}
+
 bool sameHttpOrigin(Uri a, Uri b) =>
     (a.scheme == 'http' || a.scheme == 'https') &&
     a.host.isNotEmpty &&
@@ -25,6 +36,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
   static final instance = EmbeddedTailnet();
   bool get enabled => bind.mainGetOptionSync(key: tailnetEnabledKey) == 'Y';
   bool get apiEnabled => bind.mainGetOptionSync(key: tailnetApiKey) != 'N';
+  String get controlUrl => IosPreferences.read('tailnet-control-url');
   bool routeEnabled(String key) => bind.mainGetOptionSync(key: key) == 'Y';
   bool routesApi(Uri url) =>
       enabled &&
@@ -39,6 +51,34 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
       _manualStop = false,
       _foreground = true;
   Timer? _poll;
+
+  Uri? get authorizationUri {
+    final uri = Uri.tryParse(_authUrl);
+    if (uri == null ||
+        (uri.scheme != 'https' &&
+            !(uri.scheme == 'http' &&
+                Uri.tryParse(controlUrl)?.scheme == 'http')) ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      return null;
+    }
+    return uri;
+  }
+
+  Future<void> setControlUrl(String value) async {
+    if (busy || value == controlUrl) return;
+    if (!validTailnetControlUrl(value)) {
+      error =
+          'Enter an HTTP or HTTPS control server URL without credentials, query or fragment.';
+      notifyListeners();
+      return;
+    }
+    // The settings dialog confirms this identity reset before changing networks.
+    await forget();
+    if (error.isNotEmpty) return;
+    await IosPreferences.write('tailnet-control-url', value);
+    notifyListeners();
+  }
 
   void initialize() {
     if (_initialized) return;
@@ -74,6 +114,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
     _manualStop = false;
     busy = true;
     error = '';
+    _authUrl = '';
     state = 'Starting';
     notifyListeners();
     try {
@@ -86,6 +127,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
             'Configure an explicit API Server in ID/Relay Server settings.');
       }
       final config = jsonEncode({
+        'controlUrl': controlUrl,
         'api': api,
         'id': routeEnabled(tailnetIdKey)
             ? _server('custom-rendezvous-server', 21116)
@@ -138,16 +180,43 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> authorize() async {
-    if (_authUrl.isEmpty) {
-      await connect();
-      if (_authUrl.isEmpty) return;
-    }
-    final uri = Uri.tryParse(_authUrl);
-    if (uri == null ||
-        uri.scheme != 'https' ||
-        uri.host.isEmpty ||
-        !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    if (!enabled || busy) return;
+    await refresh();
+    if (state == 'Stopped' || state == 'Failed') await connect();
+    if (state == 'Failed' || !enabled) return;
+    busy = true;
+    error = '';
+    notifyListeners();
+    try {
+      final deadline = DateTime.now().add(const Duration(seconds: 30));
+      while (_authUrl.isEmpty && DateTime.now().isBefore(deadline)) {
+        if (!_foreground) return;
+        await refresh();
+        if (state == 'Failed' ||
+            state == 'Running' ||
+            state == 'NeedsMachineAuth') {
+          return;
+        }
+        if (_authUrl.isEmpty) {
+          await Future<void>.delayed(const Duration(seconds: 1));
+        }
+      }
+      if (!_foreground) return;
+      if (_authUrl.isEmpty) {
+        error =
+            'No authorization link received. Check the control server address and network, then retry.';
+        return;
+      }
+      final uri = authorizationUri;
+      if (uri == null ||
+          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        error = 'Could not open Tailscale authorization in the browser.';
+      }
+    } catch (_) {
       error = 'Could not open Tailscale authorization in the browser.';
+    } finally {
+      if (error.isNotEmpty) _poll?.cancel();
+      busy = false;
       notifyListeners();
     }
   }
@@ -162,6 +231,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
       await iosChannel.invokeMethod('tailnetStop');
       state = 'Stopped';
       error = '';
+      _authUrl = '';
     } catch (_) {
       state = 'Failed';
       error = 'Could not stop Tailscale. Retry disconnecting.';

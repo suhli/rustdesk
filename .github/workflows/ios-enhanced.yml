@@ -84,8 +84,8 @@ jobs:
         working-directory: flutter
         run: |
           flutter pub get
-          flutter test --no-pub test/ios_orientation_test.dart
-          flutter analyze --no-pub --no-fatal-infos lib/mobile/ios test/ios_orientation_test.dart
+          flutter test --no-pub test/ios_orientation_test.dart test/ios_tailnet_test.dart
+          flutter analyze --no-pub --no-fatal-infos lib/mobile/ios test/ios_orientation_test.dart test/ios_tailnet_test.dart
       - name: Configure independent identity and icon
         run: |
           python3 scripts/ios_identity.py
@@ -113,7 +113,6 @@ jobs:
         run: |
           flutter build ipa --release --no-codesign --build-number="$GITHUB_RUN_NUMBER"
           test -d build/ios/archive/Runner.xcarchive
-          ditto -c -k --sequesterRsrc --keepParent build/ios/archive/Runner.xcarchive build/ios/unsigned-xcarchive.zip
           test -f build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist
           staging_dir="$(mktemp -d "$RUNNER_TEMP/ios-unsigned.XXXXXX")"
           mkdir -p "$staging_dir/Payload" build/ios/ipa
@@ -132,11 +131,7 @@ jobs:
         with:
           name: ios-enhanced-${{ inputs.signing }}
           if-no-files-found: error
-          path: |
-            flutter/build/ios/unsigned-xcarchive.zip
-            flutter/build/ios/ipa/*.ipa
-            flutter/ios/IosEnhancements/THIRD-PARTY-NOTICES.txt
-            LICENCE
+          path: flutter/build/ios/ipa/*.ipa
           retention-days: 14
       - name: Remove signing material
         if: always() && inputs.signing != 'unsigned'

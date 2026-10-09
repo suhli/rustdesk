@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../common.dart';
 import '../../models/platform_model.dart';
 import 'orientation.dart';
@@ -103,6 +104,42 @@ class _IosSettingsPageState extends State<IosSettingsPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _controlServer() async {
+    final controller = TextEditingController(text: tailnet.controlUrl);
+    final value = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: Text(translate('Tailscale / Headscale control server')),
+              content: SingleChildScrollView(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(translate(
+                    'Leave empty for official Tailscale. For Headscale, enter its server URL.')),
+                TextField(
+                    controller: controller,
+                    autocorrect: false,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(
+                        hintText: 'https://headscale.example.com')),
+                Text(translate(
+                    'Changing the control server clears this app’s saved Tailscale identity and requires authorization again.')),
+              ])),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(translate('Cancel'))),
+                TextButton(
+                    onPressed: () => Navigator.pop(
+                        context,
+                        controller.text
+                            .trim()
+                            .replaceFirst(RegExp(r'/+$'), '')),
+                    child: Text(translate('Save'))),
+              ],
+            ));
+    controller.dispose();
+    if (value != null) await tailnet.setControlUrl(value);
+  }
+
   String get _status {
     if (!tailnet.enabled) return 'Not enabled';
     switch (tailnet.state) {
@@ -111,7 +148,7 @@ class _IosSettingsPageState extends State<IosSettingsPage> {
       case 'NeedsLogin':
         return 'Authorization required';
       case 'NeedsMachineAuth':
-        return 'Approve this device in the Tailscale admin console';
+        return 'Approve this device on your control server';
       case 'Starting':
       case 'NoState':
         return 'Connecting...';
@@ -162,6 +199,14 @@ class _IosSettingsPageState extends State<IosSettingsPage> {
                       IosPreferences.floatingToolbar, (v) => _set('toolbar', v),
                       detail: 'Applies to the next remote session.'),
                   _heading('Tailscale'),
+                  ListTile(
+                      title: Text(
+                          translate('Tailscale / Headscale control server')),
+                      subtitle: Text(tailnet.controlUrl.isEmpty
+                          ? translate('Official Tailscale')
+                          : tailnet.controlUrl),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: tailnet.busy ? null : _controlServer),
                   _switch('Enable embedded Tailscale', tailnet.enabled,
                       tailnet.busy ? null : tailnet.setEnabled,
                       detail:
@@ -194,6 +239,17 @@ class _IosSettingsPageState extends State<IosSettingsPage> {
                             ? null
                             : tailnet.authorize,
                         child: Text(translate('Authorize'))),
+                    if (tailnet.authorizationUri != null)
+                      TextButton(
+                          onPressed: tailnet.busy
+                              ? null
+                              : () async {
+                                  await Clipboard.setData(ClipboardData(
+                                      text: tailnet.authorizationUri!
+                                          .toString()));
+                                  showToast(translate('Successful'));
+                                },
+                          child: Text(translate('Copy authorization link'))),
                     TextButton(
                         onPressed: !tailnet.enabled || tailnet.busy
                             ? null

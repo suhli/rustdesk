@@ -836,5 +836,13 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("iOS did not rotate the window. Unlock orientation in Control Center, then use Rotate screen.", "iOS 未旋转窗口。请在控制中心关闭方向锁定，然后使用旋转屏幕功能。"),
         ("iOS enhancements", "iOS 增强功能"),
         ("iOS refused the rotation. Use Rotate screen again, or unlock orientation in Control Center.", "iOS 拒绝了旋转请求。请重试旋转屏幕，或在控制中心关闭方向锁定。"),
+        ("Tailscale / Headscale control server", "Tailscale / Headscale 控制服务器"),
+        ("Leave empty for official Tailscale. For Headscale, enter its server URL.", "留空使用官方 Tailscale；使用 Headscale 时填写其服务器地址。"),
+        ("Changing the control server clears this app’s saved Tailscale identity and requires authorization again.", "更改控制服务器会清除本应用保存的 Tailscale 身份，需要重新授权。"),
+        ("Official Tailscale", "官方 Tailscale"),
+        ("Copy authorization link", "复制授权链接"),
+        ("Approve this device on your control server", "请在控制服务器上批准此设备"),
+        ("Enter an HTTP or HTTPS control server URL without credentials, query or fragment.", "请输入 HTTP 或 HTTPS 控制服务器地址，不要包含账号密码、查询参数或片段。"),
+        ("No authorization link received. Check the control server address and network, then retry.", "未收到授权链接，请检查控制服务器地址和网络后重试。"),
     ].iter().cloned().collect();
 }

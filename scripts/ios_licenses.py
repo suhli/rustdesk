@@ -16,7 +16,10 @@ while source.strip():
         modules[module['Path']] = module.get('Replace', module)
 
 go_root = Path(subprocess.check_output(['go', 'env', 'GOROOT'], encoding='utf-8').strip())
-sections = ['Go runtime\n' + (go_root / 'LICENSE').read_text(encoding='utf-8')]
+sections = [
+    'RustDesk\n' + (Path(__file__).resolve().parents[1] / 'LICENCE').read_text(encoding='utf-8'),
+    'Go runtime\n' + (go_root / 'LICENSE').read_text(encoding='utf-8'),
+]
 for name, module in sorted(modules.items()):
     root = Path(module['Dir'])
     notices = sorted({p for pattern in ('LICENSE*', 'LICENCE*', 'COPYING*', 'NOTICE*', 'PATENTS*')

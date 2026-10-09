@@ -18,9 +18,10 @@ import (
 )
 
 type Config struct {
-	API   string `json:"api"`
-	ID    string `json:"id"`
-	Relay string `json:"relay"`
+	API        string `json:"api"`
+	ID         string `json:"id"`
+	Relay      string `json:"relay"`
+	ControlURL string `json:"controlUrl"`
 }
 
 type Node struct {
@@ -43,6 +44,11 @@ func (n *Node) Start(dir string, key []byte, configJSON string) error {
 	var config Config
 	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
 		return err
+	}
+	if config.ControlURL != "" {
+		if _, err := apiOrigin(config.ControlURL); err != nil {
+			return errors.New("invalid Tailnet control server URL")
+		}
 	}
 	targets := []string{"", config.ID, config.Relay, ""}
 	for _, index := range []int{1, 2} {
@@ -74,7 +80,7 @@ func (n *Node) Start(dir string, key []byte, configJSON string) error {
 	if err := os.Setenv("TS_NO_LOGS_NO_SUPPORT", "true"); err != nil {
 		return err
 	}
-	s := &tsnet.Server{Dir: dir, Store: store, Hostname: "rustdesk-ios",
+	s := &tsnet.Server{Dir: dir, Store: store, Hostname: "rustdesk-ios", ControlURL: config.ControlURL,
 		Logf: func(string, ...any) {}, UserLogf: func(string, ...any) {}}
 	if err = s.Start(); err != nil {
 		s.Close()
@@ -185,8 +191,9 @@ func (n *Node) Status() (string, error) {
 	if err != nil {
 		return "", errors.New("could not read Tailnet status")
 	}
-	name := "rustdesk-ios"
-	if status.Self != nil {
+	name := n.server.Hostname
+	// Before authorization, Self.HostName is the OS hostname, often localhost on iOS.
+	if status.Self != nil && status.Self.InNetworkMap && status.Self.HostName != "" {
 		name = status.Self.HostName
 	}
 	data, err := json.Marshal(map[string]any{"state": status.BackendState,
