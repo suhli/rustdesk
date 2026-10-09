@@ -56,7 +56,9 @@ Flutter 先设置允许的方向，Swift 再从当前 Flutter 控制器所在的
 
 新入口是 `.github/workflows/ios-enhanced.yml` 的 `workflow_dispatch`。选择当前分支、独立 Bundle ID 和签名模式。工作流复用仓库现有的 bridge 生成工作流、Flutter 补丁及 vcpkg 构建步骤，固定 Flutter 3.24.5、Rust 1.75、Go 1.26.5、Xcode 16.4，使用 `macos-15` runner。
 
-- `unsigned`：执行原生依赖、Go、Rust、Flutter 测试和 archive 构建，上传 `unsigned-xcarchive.zip`。它是供后续签名/检查的归档，不能直接安装到 iPhone。
+如果 Actions 页面没有工作流，先检查 Fork 是否已启用 Actions。手动运行的工作流文件必须先存在于仓库默认分支；仅推送到功能分支不会建立该手动入口。可以把增强分支设为此 Fork 的默认分支，或将工作流及其依赖合入默认分支，然后在 `iOS Enhanced → Run workflow` 中选择要构建的分支。参见 [GitHub 手动运行工作流说明](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)。
+
+- `unsigned`：执行原生依赖、Go、Rust、Flutter 测试和 archive 构建，将归档中的 `Runner.app` 按 `Payload/Runner.app` 结构打包成 `RustDesk-Enhanced-unsigned.ipa`，同时保留 `unsigned-xcarchive.zip`。在构建产物 `ios-enhanced-unsigned` 中解压找到 `.ipa`，可用于 LiveContainer 导入或后续重签名；不需要配置 Apple 签名 Secrets。它不能直接通过 iOS 的普通安装流程安装，LiveContainer 内的实际运行兼容性仍待真机验证。
 - `development` / `ad-hoc` / `app-store`：导入证书、核验 profile 的 Team ID 和显式 Bundle ID、手动签名、导出 IPA、检查归档签名和 IPA 是否存在。签名材料在结束时清理。
 - `app-store` 导出仅表示生成供上传的签名包；没有自动上传、App Store 审核或分发保证。上传要求可能需要更新 Xcode/SDK，需单独验证。
 
@@ -96,7 +98,7 @@ Windows 上已运行 Go 模块的身份恢复/篡改拒绝、代理目标白名�
 
 ### 真机验收步骤（待执行）
 
-1. 先跑 unsigned CI。签名成功后，使用 Xcode 的 Devices and Simulators 安装 Development/Ad Hoc IPA，或通过相应受支持的分发渠道安装。不要把 unsigned 归档当作可安装 IPA。
+1. 先跑 unsigned CI，将产物中的 `RustDesk-Enhanced-unsigned.ipa` 导入已配置好的 LiveContainer 并验证启动；`.xcarchive.zip` 是归档，不是导入文件。若使用普通安装流程，先配置签名，再使用 Xcode 的 Devices and Simulators 安装 Development/Ad Hoc IPA，或通过相应受支持的分发渠道安装。
 2. 干净安装，保持 Tailnet 关闭：确认无额外授权/节点创建；测试官方或自建 ID/Relay、账号登录和远程控制。分别关闭首页和工具栏增强，确认原路径可用。
 3. 配置自己的 API、ID、Relay、Server Key。仅开启 API 分流，浏览器授权后返回应用；测试第三方 Console 登录、地址簿拉取、设备连接和 Token 失效。ID/Relay 保持公网访问，检查 secure TCP / KeyExchange 仍能协商。
 4. 断开内嵌节点，确认私有 API 报错且不会经公网 ID 代理发送；开启明确的备用地址后才允许使用备用。配置错误证书/Server Key 时必须失败。

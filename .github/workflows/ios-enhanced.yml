@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       signing:
-        description: 'unsigned validates compilation; other modes require Apple signing secrets'
+        description: 'unsigned packages an IPA for LiveContainer/re-signing; other modes require Apple signing secrets'
         type: choice
         options: [unsigned, development, ad-hoc, app-store]
         default: unsigned
@@ -106,13 +106,19 @@ jobs:
           printf '%s' "$IOS_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/ios-profile.mobileprovision"
           security cms -D -i "$RUNNER_TEMP/ios-profile.mobileprovision" > "$RUNNER_TEMP/ios-profile.plist"
           python3 scripts/ios_signing.py
-      - name: Archive unsigned application
+      - name: Archive and package unsigned IPA
         if: inputs.signing == 'unsigned'
         working-directory: flutter
         run: |
           flutter build ipa --release --no-codesign --build-number="$GITHUB_RUN_NUMBER"
           test -d build/ios/archive/Runner.xcarchive
           ditto -c -k --sequesterRsrc --keepParent build/ios/archive/Runner.xcarchive build/ios/unsigned-xcarchive.zip
+          test -f build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist
+          staging_dir="$(mktemp -d "$RUNNER_TEMP/ios-unsigned.XXXXXX")"
+          mkdir -p "$staging_dir/Payload" build/ios/ipa
+          ditto build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app "$staging_dir/Payload/Runner.app"
+          ditto -c -k --norsrc --keepParent "$staging_dir/Payload" build/ios/ipa/RustDesk-Enhanced-unsigned.ipa
+          unzip -t build/ios/ipa/RustDesk-Enhanced-unsigned.ipa
       - name: Archive and export signed IPA
         if: inputs.signing != 'unsigned'
         working-directory: flutter
