@@ -89,8 +89,8 @@ jobs:
         working-directory: flutter
         run: |
           flutter pub get
-          flutter test --no-pub test/ios_orientation_test.dart test/ios_tailnet_test.dart
-          flutter analyze --no-pub --no-fatal-infos lib/mobile/ios test/ios_orientation_test.dart test/ios_tailnet_test.dart
+          flutter test --no-pub test/ios_orientation_test.dart test/ios_tailnet_test.dart test/ios_keyboard_macro_test.dart
+          flutter analyze --no-pub --no-fatal-infos lib/mobile/ios test/ios_orientation_test.dart test/ios_tailnet_test.dart test/ios_keyboard_macro_test.dart
       - name: Configure independent identity and icon
         run: |
           python3 scripts/ios_identity.py

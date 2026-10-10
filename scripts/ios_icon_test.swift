@@ -8,7 +8,8 @@ for item in manifest["images"] as! [[String: Any]] {
     let points = Double((item["size"] as! String).components(separatedBy: "x")[0])!
     let scale = Double((item["scale"] as! String).replacingOccurrences(of: "x", with: ""))!
     let pixels = Int(points * scale)
-    guard let bitmap = NSBitmapImageRep(contentsOf: directory.appendingPathComponent(file)),
+    let data = try Data(contentsOf: directory.appendingPathComponent(file))
+    guard let bitmap = NSBitmapImageRep(data: data),
           bitmap.pixelsWide == pixels, bitmap.pixelsHigh == pixels, !bitmap.hasAlpha else {
         fatalError("Icon must be an opaque \(pixels)x\(pixels) PNG: \(file)")
     }

@@ -5,6 +5,7 @@ import '../../models/platform_model.dart';
 import 'orientation.dart';
 import 'preferences.dart';
 import 'tailnet.dart';
+import 'macros_page.dart';
 
 class IosSettingsPage extends StatefulWidget {
   const IosSettingsPage({super.key});
@@ -198,6 +199,10 @@ class _IosSettingsPageState extends State<IosSettingsPage> {
                   _switch('Floating session toolbar',
                       IosPreferences.floatingToolbar, (v) => _set('toolbar', v),
                       detail: 'Applies to the next remote session.'),
+                  ListTile(
+                      title: Text(translate('Custom macros')),
+                      leading: const Icon(Icons.playlist_play),
+                      onTap: () => showIosMacros(context)),
                   _heading('Tailscale'),
                   ListTile(
                       title: Text(

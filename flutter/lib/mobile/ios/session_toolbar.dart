@@ -4,7 +4,7 @@ import '../../common.dart';
 
 /// Floats over the existing canvas without changing input coordinates.
 class IosSessionToolbar extends StatefulWidget {
-  final VoidCallback close, keyboard, mouse, display, rotate, more, help;
+  final VoidCallback close, keyboard, mouse, display, rotate, more, help, macros;
   final bool touchMode, keyboardEnabled;
   const IosSessionToolbar(
       {super.key,
@@ -15,6 +15,7 @@ class IosSessionToolbar extends StatefulWidget {
       required this.rotate,
       required this.more,
       required this.help,
+      required this.macros,
       required this.touchMode,
       required this.keyboardEnabled});
   @override
@@ -78,6 +79,8 @@ class _IosSessionToolbarState extends State<IosSessionToolbar> {
                               Icons.desktop_windows, 'Display', widget.display),
                           _button(Icons.screen_rotation, 'Rotate screen',
                               widget.rotate),
+                          _button(Icons.playlist_play, 'Custom macros',
+                              widget.macros),
                           _button(Icons.more_horiz, 'More', widget.more),
                           _button(Icons.help_outline, 'Help', widget.help),
                           _button(Icons.fullscreen, 'Fullscreen',

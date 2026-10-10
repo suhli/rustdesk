@@ -27,6 +27,7 @@ import '../widgets/custom_scale_widget.dart';
 import '../ios/preferences.dart';
 import '../ios/orientation.dart';
 import '../ios/session_toolbar.dart';
+import '../ios/macros_page.dart';
 
 final initText = '1' * 1024;
 
@@ -680,6 +681,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         if (mounted && error != null) showToast(translate(error));
       },
       more: () => showActions(widget.id),
+      macros: () =>
+          showIosMacros(context, ffi: gFFI, sessionActive: () => mounted),
       help: () => setState(() => _showGestureHelp = !_showGestureHelp),
     );
   }
@@ -809,6 +812,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final y = size.height;
     final mobileActionMenus = _getMobileActionMenus();
     final menus = toolbarControls(context, id, gFFI);
+    if (isIOS) {
+      menus.add(TTextMenu(
+          child: Text(translate('Custom macros')),
+          onPressed: () =>
+              showIosMacros(context, ffi: gFFI, sessionActive: () => mounted)));
+    }
 
     final List<PopupMenuEntry<int>> more = [
       ...mobileActionMenus
