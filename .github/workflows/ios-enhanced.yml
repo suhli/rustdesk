@@ -95,6 +95,7 @@ jobs:
         run: |
           python3 scripts/ios_identity.py
           swift scripts/ios_icon.swift
+          swift scripts/ios_icon_test.swift
       - name: Import certificate
         if: inputs.signing != 'unsigned'
         uses: apple-actions/import-codesign-certs@253ddeeac23f2bdad1646faac5c8c2832e800071

@@ -28,13 +28,19 @@ for item in manifest["images"] as! [[String: Any]] {
           let points = Double(size.components(separatedBy: "x")[0]),
           let multiplier = Double(scale.replacingOccurrences(of: "x", with: "")) else { continue }
     let pixels = Int(points * multiplier)
-    let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
-        bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false,
-        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    // Quartz cannot draw into packed 24-bit RGB; 32-bit RGBX keeps the exported PNG opaque.
+    guard let context = CGContext(data: nil, width: pixels, height: pixels,
+        bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+        fatalError("Cannot create icon bitmap: \(file)")
+    }
     NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+    NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
     image.draw(in: NSRect(x: 0, y: 0, width: pixels, height: pixels))
     NSGraphicsContext.restoreGraphicsState()
-    guard let png = bitmap.representation(using: .png, properties: [:]) else { fatalError("PNG encoding failed") }
+    guard let rendered = context.makeImage(),
+          let png = NSBitmapImageRep(cgImage: rendered).representation(using: .png, properties: [:]) else {
+        fatalError("PNG encoding failed: \(file)")
+    }
     try png.write(to: directory.appendingPathComponent(file))
 }
