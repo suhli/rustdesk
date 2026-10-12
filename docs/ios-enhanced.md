@@ -100,6 +100,10 @@ Profile 必须与签名模式、证书及目标设备相符。Development/Ad Hoc
 
 `scripts/ios_identity.py` 和 `scripts/ios_icon.swift` 在 CI 构建目录中设置独立 Bundle ID、RustDesk Enhanced 名称和原创几何图标。本地发布前也要运行它们；源仓库原始 iOS 资源保留，以减少上游合并冲突。脚本拒绝使用官方 `com.carriez.*` Bundle ID。
 
+图标有两道检查：`ios_icon_test.swift` 校验生成的源图；上传 IPA 前，`ios_ipa_icon_test.swift` 从实际包中读取 iPhone/iPad 主图标声明，检查对应 PNG 存在、不透明且有可见图案。Xcode 优化后的 CgBI PNG 先用 SDK 的 `pngcrush -revert-iphone-optimizations` 解码，不能把普通图片查看器打不开它当作文件损坏。检查只操作临时副本，不重打包或修改签名。
+
+若 LiveContainer 中仍显示旧黑图，先核对实际导入的构建编号（`CFBundleVersion`）；列表中的 `1.5.0` 只是版本号，无法区分新旧构建。本次实际检查的 build 5 包内图标为纯黑，build 7 的 iPhone/iPad 图标均有正常图案。应先用正确 IPA 覆盖更新现有应用并彻底退出、重开 LiveContainer。部分版本会在应用包目录缓存 `LCAppIconLight.png` / `LCAppIconDark.png`；若已确认包内图标正常且这两个文件存在，可只移除这两个缓存后重开。不要删除应用数据容器或修改 Bundle ID，以免影响现有设置和节点身份。缓存实现参考 [LiveContainer LCAppInfo](https://github.com/LiveContainer/LiveContainer/blob/main/LiveContainerSwiftUI/Models/LCAppInfo.m)。
+
 macOS 本地构建（先按仓库现有流程安装 vcpkg 依赖并生成 bridge）：
 
 iOS 只生成 Rust 静态库，由 Xcode 将 `liblibrustdesk.a` 与 CocoaPods 提供的 Go 静态库 `libEmbeddedTailnet.a` 一起链接。使用下方的 `cargo rustc --crate-type staticlib`；普通 `cargo build --lib` 还会按共享 manifest 生成动态库，在 Go 库尚未参与链接时因缺少 `_rd_tailnet_port` 而失败。

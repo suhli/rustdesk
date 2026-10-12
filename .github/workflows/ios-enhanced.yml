@@ -133,6 +133,8 @@ jobs:
           test -d build/ios/archive/Runner.xcarchive
           codesign --verify --deep --strict build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
           test -n "$(find build/ios/ipa -name '*.ipa' -print -quit)"
+      - name: Validate icons in packaged IPA
+        run: swift scripts/ios_ipa_icon_test.swift flutter/build/ios/ipa/*.ipa
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ios-enhanced-${{ inputs.signing }}
