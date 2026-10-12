@@ -32,10 +32,8 @@ Future<void> showIosMacros(BuildContext context,
               shift: key.shift,
               command: key.command));
   try {
-    await showDialog<void>(
-        context: context,
-        builder: (_) =>
-            Dialog.fullscreen(child: IosMacrosPage(runner: runner)));
+    await Navigator.of(context, rootNavigator: true).push<void>(
+        MaterialPageRoute(builder: (_) => IosMacrosPage(runner: runner)));
   } finally {
     runner?.cancel();
   }
@@ -96,10 +94,9 @@ class _IosMacrosPageState extends State<IosMacrosPage>
   }
 
   Future<void> _edit({int? index, KeyboardMacro? initial}) async {
-    final macro = await showDialog<KeyboardMacro>(
-        context: context,
-        builder: (_) => Dialog.fullscreen(
-            child: _MacroEditor(
+    final macro = await Navigator.of(context).push<KeyboardMacro>(
+        MaterialPageRoute(
+            builder: (_) => _MacroEditor(
                 initial: index == null ? initial : _macros[index])));
     if (macro == null || !mounted) return;
     final macros = [..._macros];
@@ -162,7 +159,7 @@ class _IosMacrosPageState extends State<IosMacrosPage>
             icon: const Icon(Icons.add),
             onPressed: _busy || _loadError != null ? null : () => _edit()),
       ]),
-      body: _loadError != null
+      body: SafeArea(top: false, child: _loadError != null
           ? Center(child: Text(translate(_loadError!)))
           : ListView(padding: const EdgeInsets.all(16), children: [
               Text(translate(
@@ -228,7 +225,7 @@ class _IosMacrosPageState extends State<IosMacrosPage>
                             MacroStep('S', 0)
                           ])),
                   child: Text(translate('Add Windows sleep example'))),
-            ]));
+            ])));
 }
 
 class _MacroEditor extends StatefulWidget {
@@ -270,7 +267,9 @@ class _MacroEditorState extends State<_MacroEditor> {
   @override
   Widget build(BuildContext context) => Scaffold(
       appBar: AppBar(title: Text(translate('Edit macro')), actions: [
-        TextButton(
+        IconButton(
+            tooltip: translate('Save macro'),
+            icon: const Icon(Icons.save_outlined),
             onPressed: () {
               try {
                 Navigator.pop(context, KeyboardMacro(_name.text, _steps));
@@ -278,10 +277,9 @@ class _MacroEditorState extends State<_MacroEditor> {
                 setState(
                     () => _error = 'Enter a name and add at least one step.');
               }
-            },
-            child: Text(translate('Save macro'))),
+            }),
       ]),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
+      body: SafeArea(top: false, child: ListView(padding: const EdgeInsets.all(16), children: [
         TextField(
             controller: _name,
             maxLength: 80,
@@ -322,7 +320,7 @@ class _MacroEditorState extends State<_MacroEditor> {
             onPressed: () => _step(),
             icon: const Icon(Icons.add),
             label: Text(translate('Add step'))),
-      ]));
+      ])));
 }
 
 class _StepEditor extends StatefulWidget {
