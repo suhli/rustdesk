@@ -27,7 +27,7 @@ import '../widgets/custom_scale_widget.dart';
 import '../ios/preferences.dart';
 import '../ios/orientation.dart';
 import '../ios/session_toolbar.dart';
-import '../ios/macros_page.dart';
+import '../ios/session_macros.dart';
 
 final initText = '1' * 1024;
 
@@ -71,6 +71,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final _uniqueKey = UniqueKey();
   Timer? _iosKeyboardWorkaroundTimer;
   final bool _iosToolbar = isIOS && IosPreferences.floatingToolbar;
+  final _iosMacros = IosSessionMacros();
 
   final _blockableOverlayState = BlockableOverlayState();
 
@@ -153,6 +154,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   @override
   Future<void> dispose() async {
+    _iosMacros.cancel();
     if (isIOS) unawaited(iosOrientation.leave());
     WidgetsBinding.instance.removeObserver(this);
     // Close the session up-front. `gFFI.close()` below only calls `sessionClose`
@@ -192,6 +194,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _iosMacros.cancel();
     if (state == AppLifecycleState.resumed) {
       trySyncClipboard();
     }
@@ -682,7 +685,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       },
       more: () => showActions(widget.id),
       macros: () =>
-          showIosMacros(context, ffi: gFFI, sessionActive: () => mounted),
+          _iosMacros.show(context, ffi: gFFI, sessionActive: () => mounted),
       help: () => setState(() => _showGestureHelp = !_showGestureHelp),
     );
   }
@@ -816,7 +819,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       menus.add(TTextMenu(
           child: Text(translate('Custom macros')),
           onPressed: () =>
-              showIosMacros(context, ffi: gFFI, sessionActive: () => mounted)));
+              _iosMacros.show(context, ffi: gFFI, sessionActive: () => mounted)));
     }
 
     final List<PopupMenuEntry<int>> more = [
