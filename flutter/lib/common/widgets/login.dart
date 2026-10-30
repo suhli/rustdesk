@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../common.dart';
 import './dialog.dart';
 import './oidc_auth_status.dart';
+import './password_autofill.dart';
 
 const kOpSvgList = [
   'github',
@@ -651,7 +652,7 @@ class LoginWidgetUserPass extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return passwordAutofillGroup(Padding(
         padding: EdgeInsets.all(0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -661,12 +662,18 @@ class LoginWidgetUserPass extends StatelessWidget {
                 title: translate(DialogTextField.kUsernameTitle),
                 controller: username,
                 focusNode: userFocusNode,
+                autofillHints: iosPasswordAutofillEnabled
+                    ? const [AutofillHints.username]
+                    : null,
                 prefixIcon: DialogTextField.kUsernameIcon,
                 errorText: usernameMsg),
             PasswordWidget(
               controller: pass,
               autoFocus: false,
               reRequestFocus: true,
+              autofillHints: iosPasswordAutofillEnabled
+                  ? const [AutofillHints.password]
+                  : null,
               errorText: passMsg,
             ),
             // NOT use Offstage to wrap LinearProgressIndicator
@@ -692,7 +699,7 @@ class LoginWidgetUserPass extends StatelessWidget {
               ),
             ])),
           ],
-        ));
+        )));
   }
 }
 
@@ -729,6 +736,7 @@ Future<bool?> _openLoginDialog() async {
   String? usernameMsg;
   String? passwordMsg;
   var isInProgress = false;
+  var loginDialogClosed = false;
   final oidcAuth = _OidcAuthController();
   final curOP = oidcAuth.curOP;
   // Track hover state for the close icon
@@ -766,12 +774,14 @@ Future<bool?> _openLoginDialog() async {
     });
 
     onDialogCancel() {
+      loginDialogClosed = true;
       isInProgress = false;
       close(false);
     }
 
     handleLoginResponse(LoginResponse resp, bool storeIfAccessToken,
-        void Function([dynamic])? close) async {
+        void Function([dynamic])? close,
+        {VoidCallback? onAuthenticated}) async {
       switch (resp.type) {
         case HttpType.kAuthResTypeToken:
           if (resp.access_token != null) {
@@ -781,6 +791,7 @@ Future<bool?> _openLoginDialog() async {
               await bind.mainSetLocalOption(
                   key: 'user_info', value: jsonEncode(resp.user ?? {}));
             }
+            onAuthenticated?.call();
             if (close != null) {
               close(true);
             }
@@ -838,15 +849,24 @@ Future<bool?> _openLoginDialog() async {
       }
       curOP.value = 'rustdesk';
       setState(() => isInProgress = true);
+      final submittedUsername = username.text;
+      final submittedPassword = password.text;
       try {
         final resp = await gFFI.userModel.login(LoginRequest(
-            username: username.text,
-            password: password.text,
+            username: submittedUsername,
+            password: submittedPassword,
             id: await bind.mainGetMyId(),
             uuid: await bind.mainGetUuid(),
             autoLogin: true,
             type: HttpType.kAuthReqTypeAccount));
-        await handleLoginResponse(resp, true, close);
+        await handleLoginResponse(resp, true, close, onAuthenticated: () {
+          if (iosPasswordAutofillEnabled &&
+              !loginDialogClosed &&
+              username.text == submittedUsername &&
+              password.text == submittedPassword) {
+            TextInput.finishAutofillContext(shouldSave: true);
+          }
+        });
       } on RequestException catch (err) {
         passwordMsg = translate(err.cause);
       } catch (err) {
@@ -991,7 +1011,10 @@ Future<bool?> _openLoginDialog() async {
       onCancel: onDialogCancel,
       onSubmit: onLogin,
     );
-  }).whenComplete(oidcAuth.close);
+  }).whenComplete(() {
+    loginDialogClosed = true;
+    return oidcAuth.close();
+  });
 
   if (res != null) {
     await UserModel.updateOtherModels();

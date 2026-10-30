@@ -59,6 +59,8 @@ class PlatformFFI {
   final _toAndroidChannel = const MethodChannel('mChannel');
 
   RustdeskImpl get ffiBind => _ffiBind;
+  @visibleForTesting
+  set ffiBind(RustdeskImpl value) => _ffiBind = value;
   F3? _session_get_rgba;
 
   static get localeName => Platform.localeName;

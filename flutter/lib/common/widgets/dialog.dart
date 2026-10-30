@@ -19,6 +19,7 @@ import '../../common.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import 'address_book.dart';
+import 'password_autofill.dart';
 
 void clientClose(SessionID sessionId, FFI ffi) async {
   if (allowAskForNoteAtEndOfConnection(ffi, true)) {
@@ -502,6 +503,7 @@ class DialogTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
   final int? maxLength;
+  final Iterable<String>? autofillHints;
 
   static const kUsernameTitle = 'Username';
   static const kUsernameIcon = Icon(Icons.account_circle_outlined);
@@ -520,6 +522,7 @@ class DialogTextField extends StatelessWidget {
       this.keyboardType,
       this.inputFormatters,
       this.maxLength,
+      this.autofillHints,
       required this.title,
       required this.controller})
       : super(key: key);
@@ -547,6 +550,7 @@ class DialogTextField extends StatelessWidget {
                 keyboardType: keyboardType,
                 inputFormatters: inputFormatters,
                 maxLength: maxLength,
+                autofillHints: autofillHints ?? const <String>[],
               ),
               if (errorText != null)
                 Align(
@@ -819,6 +823,7 @@ class PasswordWidget extends StatefulWidget {
     this.errorText,
     this.title,
     this.maxLength,
+    this.autofillHints,
   }) : super(key: key);
 
   final TextEditingController controller;
@@ -828,6 +833,7 @@ class PasswordWidget extends StatefulWidget {
   final String? errorText;
   final String? title;
   final int? maxLength;
+  final Iterable<String>? autofillHints;
 
   @override
   State<PasswordWidget> createState() => _PasswordWidgetState();
@@ -891,6 +897,7 @@ class _PasswordWidgetState extends State<PasswordWidget> {
       errorText: widget.errorText,
       focusNode: _focusNode,
       maxLength: widget.maxLength,
+      autofillHints: widget.autofillHints,
     );
   }
 }
@@ -1084,12 +1091,15 @@ _connectDialog(
       if (passwordController == null) {
         return Offstage();
       }
-      return Column(
+      return passwordAutofillGroup(Column(
         children: [
           descWidget(translate('verify_rustdesk_password_tip')),
           PasswordWidget(
             controller: passwordController,
             autoFocus: osUsernameController == null,
+            autofillHints: iosPasswordAutofillEnabled
+                ? const [AutofillHints.password]
+                : null,
           ),
           rememberWidget(
             translate('Remember password'),
@@ -1101,7 +1111,7 @@ _connectDialog(
             },
           ),
         ],
-      );
+      ));
     }
 
     return CustomAlertDialog(
