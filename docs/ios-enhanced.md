@@ -72,7 +72,7 @@ Headscale 授权页面可能显示管理员注册命令，也可能跳转到部�
 
 Flutter 先设置允许的方向，Swift 再从当前 Flutter 控制器所在的 `UIWindowScene` 请求方向变更。iOS 16+ 使用公开的 `requestGeometryUpdate`，较旧系统使用 `attemptRotationToDeviceOrientation`。请求后检查真实窗口方向，失败时给出重试/解除系统方向锁定提示。原有 Info.plist 已声明 iPhone 横竖屏和 iPad 四方向，无需重复修改。
 
-没有实现“只旋转视频”的兜底，也没有修改鼠标、拖拽、滚动、缩放、外接键盘或触控板的坐标算法。若系统拒绝方向变更，会保持真实窗口与原有输入坐标的一致性。iOS 13–15 和系统方向锁定下的实际行为尚待真机验证；这不是已保证的无条件自动横屏。
+没有实现“只旋转视频”的兜底，也没有修改鼠标、拖拽、滚动、缩放、外接键盘或触控板的坐标算法。若系统拒绝方向变更，会保持真实窗口与原有输入坐标的一致性。iOS 15 和系统方向锁定下的实际行为尚待真机验证；这不是已保证的无条件自动横屏。
 
 悬浮工具栏提供退出、键盘、触摸/鼠标模式、显示和画质菜单、旋转、更多操作、手势帮助及隐藏按钮。空闲 6 秒自动收起，顶部保留可展开按钮；使用 SafeArea 和横向滚动适应窄屏。关闭增强工具栏后保留原来的工具栏路径。
 
@@ -168,7 +168,7 @@ Headscale 改动补充了无效控制地址拒绝的 Go 测试，以及延迟授
 - `src/hbbs_http/account.rs`：匹配私有 API 时跳过旧 OIDC TLS 预热，避免先发系统网络请求；实际认证请求继续走原入口。
 - `src/hbbs_http/http_client.rs`：严格 HTTP client 增加匹配私有 API 的入口，保持 TLS 验证。
 - `src/platform/mod.rs`、`libs/base/src/config/keys.rs`：iOS 模块声明和新增独立配置键。
-- `flutter/ios/Runner/AppDelegate.swift`、`flutter/ios/Podfile`：注册原生控制器、链接静态库；只有新 pod 设置 iOS 13 部署目标，其他 pod 保持原设置。
+- `flutter/ios/Runner/AppDelegate.swift`、`flutter/ios/Podfile`：在 scene 连接时注册原生控制器并链接静态库。应用和 Pods 的最低部署目标与上游一致，为 iOS 15。
 - `.github/workflows/flutter-build.yml`：原有 iOS 构建增加必需的 Go 静态库步骤；其他平台的 job 不变。
 - `src/lang/*.rs`：仅追加新功能文案；简体中文提供翻译，其他语言回退英文，意大利语保持新增空值。`.gitignore` 仅忽略生成的 Go 二进制/头文件。
 

@@ -116,7 +116,7 @@ void main() {
   setUp(() async {
     isTest = true;
     bridge = _TestBridge();
-    platformFFI.ffiBind = bridge;
+    platformFFI.setBindingForTesting(bridge);
     await initGlobalFFI();
   });
 

@@ -60,7 +60,8 @@ class PlatformFFI {
 
   RustdeskImpl get ffiBind => _ffiBind;
   @visibleForTesting
-  set ffiBind(RustdeskImpl value) => _ffiBind = value;
+  void setBindingForTesting(RustdeskImpl binding) => _ffiBind = binding;
+
   F3? _session_get_rgba;
 
   static get localeName => Platform.localeName;

@@ -61,3 +61,5 @@ flutter/web/
 /flutter/ios/IosEnhancements/libEmbeddedTailnet.a
 /flutter/ios/IosEnhancements/libEmbeddedTailnet.h
 /flutter/ios/IosEnhancements/THIRD-PARTY-NOTICES.txt
+# Local git worktrees
+.worktrees/
