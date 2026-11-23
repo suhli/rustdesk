@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_hbb/mobile/ios/orientation.dart';
 import 'package:flutter_hbb/mobile/ios/tailnet.dart';
@@ -94,5 +96,42 @@ void main() {
     ]) {
       expect(validTailnetControlUrl(value), isFalse);
     }
+  });
+
+  test('backgrounding retains the node until the remote page closes', () async {
+    final stopped = Completer<void>();
+    var stops = 0;
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(iosChannel,
+        (call) async {
+      if (call.method == 'tailnetStop' && ++stops == 1) stopped.complete();
+      return null;
+    });
+    final owner = Object();
+    tailnet.state = 'Running';
+    tailnet.remoteSessionStarted(owner);
+    tailnet.didChangeAppLifecycleState(AppLifecycleState.paused);
+    await Future<void>.delayed(Duration.zero);
+    expect(stops, 0);
+
+    tailnet.remoteSessionEnded(owner);
+    await stopped.future;
+    await Future<void>.delayed(Duration.zero);
+    expect(tailnet.statusLabel, 'Not connected');
+  });
+
+  test('resume reads a temporarily unavailable node without restarting it',
+      () async {
+    final calls = <String>[];
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(iosChannel,
+        (call) async {
+      calls.add(call.method);
+      return jsonEncode({'state': 'Unavailable'});
+    });
+    tailnet.remoteSessionStarted(Object());
+    tailnet.didChangeAppLifecycleState(AppLifecycleState.paused);
+    tailnet.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, ['tailnetStatus']);
+    expect(tailnet.statusLabel, 'Tailscale status is temporarily unavailable');
   });
 }

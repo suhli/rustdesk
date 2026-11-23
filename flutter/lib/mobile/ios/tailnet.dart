@@ -50,6 +50,12 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
       _initialized = false,
       _manualStop = false,
       _foreground = true;
+  bool _background = false;
+  bool _resumePending = false;
+  bool? _forwardersReady;
+  Object? _remoteSession;
+  Future<void>? _statusRead;
+  final _backgroundTime = Stopwatch();
   Timer? _poll;
 
   String get statusLabel {
@@ -66,6 +72,8 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
         return 'Connecting...';
       case 'Failed':
         return 'Connection failed';
+      case 'Unavailable':
+        return 'Tailscale status is temporarily unavailable';
       default:
         return 'Not connected';
     }
@@ -137,8 +145,8 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
     state = 'Starting';
     notifyListeners();
     try {
-      // Reconnect deliberately replaces the old forwarders after server edits.
-      await iosChannel.invokeMethod('tailnetStop');
+      _poll?.cancel();
+      await _statusRead;
       final api =
           apiEnabled ? bind.mainGetOptionSync(key: 'api-server').trim() : '';
       if (apiEnabled && api.isEmpty) {
@@ -164,19 +172,26 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
       error =
           'Could not start Tailscale. Check server settings, device unlock and network access.';
     } finally {
-      busy = false;
-      notifyListeners();
+      _operationFinished();
     }
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh() {
     _poll?.cancel();
+    return _statusRead ??= _refresh().whenComplete(() {
+      _statusRead = null;
+      if (_background) _reconcileLifecycle();
+    });
+  }
+
+  Future<void> _refresh() async {
     if (!enabled) return;
     try {
       final raw = await iosChannel.invokeMethod<String>('tailnetStatus');
       final status = jsonDecode(raw ?? '{}') as Map<String, dynamic>;
       final wasRunning = state == 'Running';
       state = status['state'] as String? ?? 'Failed';
+      _forwardersReady = status['forwardersReady'] as bool?;
       error = status['error'] as String? ?? '';
       _authUrl = status['authUrl'] as String? ?? '';
       name = status['name'] as String? ?? '';
@@ -189,8 +204,9 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
     } catch (_) {
-      state = 'Failed';
-      error = 'Could not read Tailscale status. Retry the connection.';
+      state = 'Unavailable';
+      _forwardersReady = null;
+      error = 'Could not read Tailscale status. Retrying status checks.';
     }
     notifyListeners();
     if (_foreground && state != 'Stopped' && state != 'Failed') {
@@ -235,8 +251,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
       error = 'Could not open Tailscale authorization in the browser.';
     } finally {
       if (error.isNotEmpty) _poll?.cancel();
-      busy = false;
-      notifyListeners();
+      _operationFinished();
     }
   }
 
@@ -247,6 +262,8 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
     _manualStop = manual;
     notifyListeners();
     try {
+      await _statusRead;
+      if (!manual && !_shouldStopInBackground) return;
       await iosChannel.invokeMethod('tailnetStop');
       state = 'Stopped';
       error = '';
@@ -255,8 +272,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
       state = 'Failed';
       error = 'Could not stop Tailscale. Retry disconnecting.';
     } finally {
-      busy = false;
-      notifyListeners();
+      _operationFinished();
     }
   }
 
@@ -291,6 +307,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
     _poll?.cancel();
     notifyListeners();
     try {
+      await _statusRead;
       await iosChannel.invokeMethod('tailnetForget');
       await IosPreferences.write('tailnet-authorized', 'N');
       state = 'NeedsLogin';
@@ -303,8 +320,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
       error =
           'Could not clear the local identity. Retry after unlocking the device.';
     } finally {
-      busy = false;
-      notifyListeners();
+      _operationFinished();
     }
   }
 
@@ -331,23 +347,62 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  void remoteSessionStarted(Object owner) => _remoteSession = owner;
+
+  void remoteSessionEnded(Object owner) {
+    if (!identical(_remoteSession, owner)) return;
+    _remoteSession = null;
+    _reconcileLifecycle();
+  }
+
+  bool get _shouldStopInBackground =>
+      _background && _remoteSession == null && state == 'Running';
+
+  void _operationFinished() {
+    busy = false;
+    notifyListeners();
+    _reconcileLifecycle();
+  }
+
+  void _reconcileLifecycle() {
+    if (!enabled || busy) return;
+    if (_foreground && _resumePending) {
+      _resumePending = false;
+      unawaited(_restoreForeground());
+    } else if (_shouldStopInBackground) {
+      unawaited(disconnect(manual: false));
+    }
+  }
+
+  Future<void> _restoreForeground() async {
+    final watch = Stopwatch()..start();
+    final backgroundMs = _backgroundTime.elapsedMilliseconds;
+    await refresh();
+    if (!_foreground || busy) return;
+    final restart = state == 'Stopped' &&
+        !_manualStop &&
+        IosPreferences.autoConnect &&
+        IosPreferences.authorized;
+    debugPrint('iOS Tailnet resumed after ${backgroundMs}ms, '
+        'status=$state, forwarders=$_forwardersReady, '
+        'checked in ${watch.elapsedMilliseconds}ms, start=$restart');
+    if (restart) await connect();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
-    if (!enabled) return;
     if (_foreground) {
-      if (!_manualStop &&
-          IosPreferences.autoConnect &&
-          IosPreferences.authorized &&
-          this.state == 'Stopped') {
-        connect();
-      } else {
-        refresh();
-      }
-    } else if (state == AppLifecycleState.paused) {
+      _background = false;
+      _backgroundTime.stop();
+      _resumePending = true;
+      _reconcileLifecycle();
+    } else {
       _poll?.cancel();
-      if (!iosOrientation.inSession && this.state == 'Running') {
-        disconnect(manual: false);
+      if (state == AppLifecycleState.paused && !_background) {
+        _background = true;
+        _backgroundTime..reset()..start();
+        _reconcileLifecycle();
       }
     }
   }

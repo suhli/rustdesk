@@ -35,7 +35,7 @@ func rd_tailnet_stop() *C.char {
 func rd_tailnet_status() *C.char {
 	status, err := node.Status()
 	if err != nil {
-		data, _ := json.Marshal(map[string]string{"state": "Failed", "error": err.Error()})
+		data, _ := json.Marshal(map[string]string{"state": "Unavailable", "error": err.Error()})
 		return C.CString(string(data))
 	}
 	return C.CString(status)

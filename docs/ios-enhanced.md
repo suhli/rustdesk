@@ -179,3 +179,10 @@ Headscale 改动补充了无效控制地址拒绝的 Go 测试，以及延迟授
 保留根目录 `LICENCE`、版权声明和修改说明。RustDesk 使用 AGPL-3.0；分发修改版时应随版本提供相应源码和许可证，并按适用条款处理网络交互下的源码提供。`scripts/ios_licenses.py` 合并根目录 `LICENCE`、Go runtime 许可证以及实际链接的 Go 包的 Tailscale BSD-3-Clause 和传递依赖声明，生成 `THIRD-PARTY-NOTICES.txt`，通过 pod 资源包含在 IPA 中；缺失模块许可证时构建会失败，需审查后才能发布。没有复制 VoidLink 的代码、UI 素材或品牌资源。
 
 参考：[官方 tsnet](https://tailscale.com/docs/features/tsnet)、[社区 Flutter SDK](https://pub.dev/packages/tailscale)、[UIKit 场景方向请求](https://developer.apple.com/documentation/uikit/uiwindowscene/requestgeometryupdate(_:errorhandler:))、[GitHub macOS 15 构建镜像](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)。
+### 远控会话与后台 Tailnet
+
+远控页面打开时登记会话，关闭时释放。退到后台时暂停界面的 Tailnet 状态轮询。远控页面仍持有会话时，保留 Go 节点及其转发器。后台释放最后一个远控页面后，沿用空闲时停止运行中节点的策略。
+
+回前台先读取原生节点及转发器状态。只有原生节点确认已停止、用户未手动断开且已授权自动连接时，才启动节点。状态暂时不可读时继续轮询。相同配置的重复启动请求复用原节点。
+
+调试日志中的 `iOS Tailnet resumed` 记录后台停留、状态查询耗时和是否启动节点。转发器就绪表示本地转发生命周期仍有效，远端连接是否持续需要结合 RustDesk 会话日志确认。

@@ -3,9 +3,10 @@ import Security
 import UIKit
 
 public final class IosEnhancements: NSObject {
-    private let queue = DispatchQueue(label: "rustdesk.embedded-tailnet")
+    private static let queue = DispatchQueue(label: "rustdesk.embedded-tailnet")
     private weak var controller: FlutterViewController?
     private var channel: FlutterMethodChannel?
+    private static var tailnetConfiguration: String?
 
     public init(controller: FlutterViewController) {
         self.controller = controller
@@ -16,7 +17,7 @@ public final class IosEnhancements: NSObject {
             guard let self = self else { result(FlutterError(code: "unavailable", message: "iOS integration is unavailable", details: nil)); return }
             if call.method == "isTablet" { result(UIDevice.current.userInterfaceIdiom == .pad); return }
             if call.method == "orientation" { self.rotate(call.arguments as? String ?? "system", result); return }
-            self.queue.async {
+            Self.queue.async {
                 do {
                     let value = try self.tailnet(call)
                     DispatchQueue.main.async { result(value) }
@@ -58,6 +59,7 @@ public final class IosEnhancements: NSObject {
         switch call.method {
         case "tailnetStart":
             guard let config = call.arguments as? String else { throw failure("Invalid Tailnet configuration") }
+            if Self.tailnetConfiguration == config { return nil }
             var directory = try stateDirectory()
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                 attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
@@ -65,19 +67,21 @@ public final class IosEnhancements: NSObject {
             values.isExcludedFromBackup = true
             try directory.setResourceValues(values)
             let key = try stateKey(directory)
+            if Self.tailnetConfiguration != nil { try stopTailnet() }
             let error = key.withUnsafeBytes { bytes in
                 rd_tailnet_start(directory.path, config, bytes.bindMemory(to: UInt8.self).baseAddress, Int32(key.count))
             }
             try check(error)
+            Self.tailnetConfiguration = config
             return nil
         case "tailnetStop":
-            try check(rd_tailnet_stop()); return nil
+            try stopTailnet(); return nil
         case "tailnetStatus":
             guard let value = rd_tailnet_status() else { throw failure("No Tailnet status") }
             defer { rd_tailnet_free(value) }
             return String(cString: value)
         case "tailnetForget":
-            try check(rd_tailnet_stop())
+            try stopTailnet()
             let directory = try stateDirectory()
             if FileManager.default.fileExists(atPath: directory.path) { try FileManager.default.removeItem(at: directory) }
             let status = SecItemDelete(keyQuery() as CFDictionary)
@@ -85,6 +89,11 @@ public final class IosEnhancements: NSObject {
             return nil
         default: return FlutterMethodNotImplemented
         }
+    }
+
+    private func stopTailnet() throws {
+        Self.tailnetConfiguration = nil
+        try check(rd_tailnet_stop())
     }
 
     private func stateDirectory() throws -> URL {

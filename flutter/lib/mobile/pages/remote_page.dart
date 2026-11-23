@@ -29,6 +29,7 @@ import '../ios/preferences.dart';
 import '../ios/orientation.dart';
 import '../ios/session_toolbar.dart';
 import '../ios/session_macros.dart';
+import '../ios/tailnet.dart';
 
 final initText = '1' * 1024;
 
@@ -128,6 +129,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    if (isIOS) EmbeddedTailnet.instance.remoteSessionStarted(this);
     gFFI.ffiModel.updateEventListener(sessionId, widget.id);
     gFFI.start(
       widget.id,
@@ -210,6 +212,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     // "Connecting...". Dispatching it here makes teardown happen synchronously on
     // pop; the `sessionClose` in `gFFI.close()` becomes a no-op once removed.
     unawaited(bind.sessionClose(sessionId: sessionId));
+    if (isIOS) EmbeddedTailnet.instance.remoteSessionEnded(this);
     // https://github.com/flutter/flutter/issues/64935
     super.dispose();
     gFFI.dialogManager.hideMobileActionsOverlay(store: false);

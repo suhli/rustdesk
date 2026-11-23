@@ -25,14 +25,15 @@ type Config struct {
 }
 
 type Node struct {
-	lifecycle sync.Mutex
-	mu        sync.Mutex
-	server    *tsnet.Server
-	proxy     *http.Server
-	cancel    context.CancelFunc
-	listeners []net.Listener
-	ports     [4]int // API, ID, Relay, online query (ID port - 1)
-	targets   [4]string
+	lifecycle  sync.Mutex
+	mu         sync.Mutex
+	server     *tsnet.Server
+	proxy      *http.Server
+	forwarding context.Context
+	cancel     context.CancelFunc
+	listeners  []net.Listener
+	ports      [4]int // API, ID, Relay, online query (ID port - 1)
+	targets    [4]string
 }
 
 func (n *Node) Start(dir string, key []byte, configJSON string) error {
@@ -120,6 +121,7 @@ func (n *Node) Start(dir string, key []byte, configJSON string) error {
 		}
 	}
 	n.server, n.proxy, n.cancel, n.listeners = s, proxy, cancel, listeners
+	n.forwarding = ctx
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.ports = ports
@@ -172,6 +174,7 @@ func (n *Node) Stop() error {
 	}
 	err = errors.Join(err, n.server.Close())
 	n.server, n.proxy, n.cancel, n.listeners = nil, nil, nil, nil
+	n.forwarding = nil
 	return err
 }
 
@@ -197,6 +200,7 @@ func (n *Node) Status() (string, error) {
 		name = status.Self.HostName
 	}
 	data, err := json.Marshal(map[string]any{"state": status.BackendState,
-		"authUrl": status.AuthURL, "name": name, "ips": status.TailscaleIPs})
+		"authUrl": status.AuthURL, "name": name, "ips": status.TailscaleIPs,
+		"forwardersReady": n.forwarding.Err() == nil})
 	return string(data), err
 }
