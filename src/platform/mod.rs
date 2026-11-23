@@ -15,6 +15,8 @@ pub(crate) mod ios_pip;
 
 #[cfg(windows)]
 pub mod win_device;
+#[cfg(windows)]
+pub(crate) mod windows_touch;
 
 #[cfg(target_os = "macos")]
 pub mod macos;

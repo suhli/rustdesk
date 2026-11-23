@@ -25,6 +25,7 @@ import '../../models/shortcut_model.dart';
 import '../../utils/image.dart';
 import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
+import '../widgets/windows_touch.dart';
 import '../ios/preferences.dart';
 import '../ios/orientation.dart';
 import '../ios/picture_in_picture.dart';
@@ -104,6 +105,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final bool _iosToolbar = isIOS && IosPreferences.floatingToolbar;
   final _iosMacros = IosSessionMacros();
   IosRemotePictureInPicture? _iosPip;
+  final _windowsTouch = WindowsTouchInput(gFFI);
+  final _nativeTouch = false.obs;
 
   final _blockableOverlayState = BlockableOverlayState();
 
@@ -178,6 +181,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       // side effect of registering callbacks (inside toolbarControls) is
       // what we want here.
       if (mounted) {
+        if (_windowsTouchSupported) {
+          _nativeTouch.value = bind.mainGetPeerOptionSync(
+                  id: widget.id, key: windowsNativeTouchOption) == 'Y';
+        }
         _iosPip?.attach().then((_) {
           if (mounted) setState(() {});
         });
@@ -210,6 +217,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Future<void> dispose() async {
     _iosMacros.cancel();
     _iosPip?.dispose();
+    _windowsTouch.cancel();
     if (isIOS) unawaited(iosOrientation.leave());
     HardwareKeyboard.instance.removeHandler(_handleLocalKeyEvent);
     WidgetsBinding.instance.removeObserver(this);
@@ -252,6 +260,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) _iosMacros.cancel();
+    if (state != AppLifecycleState.resumed) _windowsTouch.cancel();
     if (state == AppLifecycleState.resumed) {
       _iosPip?.resumed();
       trySyncClipboard();
@@ -596,12 +605,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                               }
                               return Container(
                                 color: MyTheme.canvasColor,
-                                child: inputModel.isPhysicalMouse.value
-                                    ? getBodyForMobile()
-                                    : RawTouchGestureDetectorRegion(
-                                        child: getBodyForMobile(),
-                                        ffi: gFFI,
-                                      ),
+                                child: Obx(_mobileInputBody),
                               );
                             }),
                           ),
@@ -739,6 +743,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       close: () => clientClose(sessionId, gFFI),
       keyboard: openKeyboard,
       mouse: () {
+        if (_nativeTouch.value) {
+          _setWindowsTouch(false);
+          return;
+        }
         model.toggleTouchMode();
         bind.mainSetLocalOption(key: kOptionTouchMode, value: model.touchMode ? 'Y' : 'N');
         showToast(translate(model.touchMode ? 'Touch mode' : 'Mouse mode'));
@@ -758,6 +766,28 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget _withIosToolbar(Widget child) => _iosToolbar
       ? Stack(children: [child, _buildIosToolbar()]) : child;
+
+  bool get _windowsTouchSupported =>
+      !isWeb && (isAndroid || isIOS) && _windowsTouch.supported;
+
+  void _setWindowsTouch(bool enabled) {
+    if (!enabled) _windowsTouch.cancel();
+    _nativeTouch.value = enabled;
+    unawaited(bind.mainSetPeerOption(
+        id: widget.id, key: windowsNativeTouchOption, value: enabled ? 'Y' : 'N'));
+  }
+
+  Widget _mobileInputBody() {
+    if (_nativeTouch.value && _windowsTouchSupported) {
+      return Consumer<FfiModel>(builder: (_, model, __) {
+        if (!model.keyboard || model.viewOnly) return getBodyForMobile();
+        return WindowsTouchRegion(input: _windowsTouch, child: getBodyForMobile());
+      });
+    }
+    return inputModel.isPhysicalMouse.value
+        ? getBodyForMobile()
+        : RawTouchGestureDetectorRegion(child: getBodyForMobile(), ffi: gFFI);
+  }
 
   bool get showCursorPaint =>
       !gFFI.ffiModel.isPeerAndroid &&
@@ -817,6 +847,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (showCursorPaint) {
             paints.add(CursorPaint(widget.id));
           }
+          if (_nativeTouch.value && _windowsTouchSupported) return paints;
           if (gFFI.ffiModel.touchMode) {
             paints.add(FloatingMouse(
               ffi: gFFI,
@@ -885,6 +916,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final y = size.height;
     final mobileActionMenus = _getMobileActionMenus();
     final menus = toolbarControls(context, id, gFFI);
+    if (_windowsTouchSupported && gFFI.ffiModel.keyboard && !gFFI.ffiModel.viewOnly) {
+      menus.add(TTextMenu(
+          child: Text(translate(_nativeTouch.value
+              ? 'Exit Windows native touch'
+              : 'Windows native touch')),
+          onPressed: () => _setWindowsTouch(!_nativeTouch.value)));
+    }
     if (isIOS) {
       menus.add(TTextMenu(
           child: Text(translate('Custom macros')),

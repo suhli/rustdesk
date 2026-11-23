@@ -804,6 +804,8 @@ impl Connection {
                             log::info!("Change permission {} -> {}", name, enabled);
                             if &name == "keyboard" {
                                 conn.keyboard = enabled;
+                                #[cfg(windows)]
+                                if !enabled { conn.cancel_native_touch(); }
                                 conn.send_permission(Permission::Keyboard, enabled).await;
                                 if let Some(s) = conn.server.upgrade() {
                                     s.write().unwrap().subscribe(
@@ -1253,6 +1255,8 @@ impl Connection {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn handle_input(receiver: std_mpsc::Receiver<MessageInput>, tx: Sender) {
         let mut block_input_mode = false;
+        #[cfg(windows)]
+        let mut native_touch_conn = None;
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             rdev::set_mouse_extra_info(enigo::ENIGO_INPUT_EXTRA_VALUE);
@@ -1286,6 +1290,10 @@ impl Connection {
                         }
                     }
                     MessageInput::Pointer((msg, id)) => {
+                        #[cfg(windows)]
+                        if msg.has_native_touch() {
+                            native_touch_conn = Some(id);
+                        }
                         handle_pointer(&msg, id);
                     }
                     MessageInput::BlockOn => {
@@ -1325,6 +1333,10 @@ impl Connection {
         }
         #[cfg(target_os = "linux")]
         clear_remapped_keycode();
+        #[cfg(windows)]
+        if let Some(id) = native_touch_conn {
+            handle_pointer(&crate::platform::windows_touch::cancellation(), id);
+        }
         log::debug!("Input thread exited");
     }
 
@@ -1981,6 +1993,7 @@ impl Connection {
         }
         #[cfg(target_os = "windows")]
         {
+            crate::platform::windows_touch::advertise(&mut platform_additions);
             platform_additions.insert(
                 "is_installed".into(),
                 json!(crate::platform::is_installed()),
@@ -2473,6 +2486,11 @@ impl Connection {
         self.tx_input
             .send(MessageInput::Pointer((msg, conn_id)))
             .ok();
+    }
+
+    #[cfg(windows)]
+    fn cancel_native_touch(&self) {
+        self.input_pointer(crate::platform::windows_touch::cancellation(), self.inner.id());
     }
 
     #[inline]
@@ -5051,6 +5069,8 @@ impl Connection {
         if let Ok(q) = o.disable_keyboard.enum_value() {
             if q != BoolOption::NotSet {
                 self.disable_keyboard = q == BoolOption::Yes;
+                #[cfg(windows)]
+                if self.disable_keyboard { self.cancel_native_touch(); }
                 if let Some(s) = self.server.upgrade() {
                     s.write().unwrap().subscribe(
                         super::clipboard_service::NAME,

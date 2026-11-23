@@ -187,9 +187,25 @@ message TouchEvent {
   }
 }
 
+message NativeTouchContact {
+  enum Phase {
+    Unknown = 0;
+    Down = 1;
+    Move = 2;
+    Up = 3;
+    Cancel = 4;
+    CancelAll = 5;
+  }
+  Phase phase = 1;
+  uint32 id = 2;
+  sint32 x = 3;
+  sint32 y = 4;
+}
+
 message PointerDeviceEvent {
   oneof union {
     TouchEvent touch_event = 1;
+    NativeTouchContact native_touch = 3;
   }
   repeated ControlKey modifiers = 2;
 }

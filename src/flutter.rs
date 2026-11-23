@@ -1958,10 +1958,36 @@ pub fn session_send_pointer(session_id: SessionID, msg: String) {
         match (m.get("k"), m.get("v")) {
             (Some(k), Some(v)) => match k.as_str() {
                 Some("touch") => session_send_touch_event(session_id, v, alt, ctrl, shift, command),
+                #[cfg(any(target_os = "android", target_os = "ios"))]
+                Some("native-touch") => session_send_native_touch(session_id, v),
                 _ => {}
             },
             _ => {}
         }
+    }
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn session_send_native_touch(session_id: SessionID, value: &serde_json::Value) {
+    use native_touch_contact::Phase;
+    let phase = match value["phase"].as_str() {
+        Some("down") => Phase::Down,
+        Some("move") => Phase::Move,
+        Some("up") => Phase::Up,
+        Some("cancel") => Phase::Cancel,
+        Some("cancel-all") => Phase::CancelAll,
+        _ => return,
+    };
+    let coordinate = |key| value[key].as_i64().and_then(|v| i32::try_from(v).ok());
+    let (Some(id), Some(x), Some(y)) = (
+        value["id"].as_u64().and_then(|v| u32::try_from(v).ok()),
+        coordinate("x"),
+        coordinate("y"),
+    ) else {
+        return;
+    };
+    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
+        session.send_native_touch(NativeTouchContact { phase: phase.into(), id, x, y, ..Default::default() });
     }
 }
 

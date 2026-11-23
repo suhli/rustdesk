@@ -1240,6 +1240,10 @@ pub fn handle_pointer_(evt: &PointerDeviceEvent, conn: i32) {
     }
 
     match &evt.union {
+        #[cfg(windows)]
+        Some(base::message_proto::pointer_device_event::Union::NativeTouch(contact)) => {
+            crate::platform::windows_touch::handle(contact, conn);
+        }
         Some(TouchEvent(evt)) => match &evt.union {
             Some(ScaleUpdate(_scale_evt)) => {
                 #[cfg(target_os = "windows")]

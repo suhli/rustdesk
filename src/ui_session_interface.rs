@@ -1177,6 +1177,13 @@ impl<T: InvokeUiSession> Session<T> {
         send_pointer_device_event(evt, alt, ctrl, shift, command, self);
     }
 
+    #[cfg(all(feature = "flutter", any(target_os = "android", target_os = "ios")))]
+    pub(crate) fn send_native_touch(&self, contact: NativeTouchContact) {
+        let mut event = PointerDeviceEvent::new();
+        event.set_native_touch(contact);
+        send_pointer_device_event(event, false, false, false, false, self);
+    }
+
     pub fn send_touch_pan_event(
         &self,
         event: &str,

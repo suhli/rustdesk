@@ -927,5 +927,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("High quality", "高画质"),
         ("Picture in Picture is unavailable", "画中画暂不可用"),
         ("Tailscale status is temporarily unavailable", "暂时无法获取 Tailscale 状态"),
+        ("Windows native touch", "Windows 原生触控"),
+        ("Exit Windows native touch", "退出 Windows 原生触控"),
     ].iter().cloned().collect();
 }

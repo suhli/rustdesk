@@ -927,5 +927,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("High quality", ""),
         ("Picture in Picture is unavailable", ""),
         ("Tailscale status is temporarily unavailable", ""),
+        ("Windows native touch", ""),
+        ("Exit Windows native touch", ""),
     ].iter().cloned().collect();
 }
