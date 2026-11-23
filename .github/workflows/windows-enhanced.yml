@@ -1,0 +1,117 @@
+name: Windows Enhanced
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-enhanced-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bridge:
+    uses: ./.github/workflows/bridge.yml
+  topmost-window:
+    uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
+    with:
+      target: windows-2022
+      configuration: Release
+      platform: x64
+      target_version: Windows10
+  windows-x64:
+    name: Windows x64
+    needs: [bridge, topmost-window]
+    runs-on: windows-2022
+    timeout-minutes: 180
+    env:
+      VCPKG_BINARY_SOURCES: 'clear;x-gha,readwrite'
+      VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+      WINDOWS_BUNDLE: flutter/build/windows/x64/runner/Release
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: bridge-artifact
+          path: ./
+      - uses: KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0
+        with:
+          version: '15.0.6'
+      - uses: subosito/flutter-action@2783a3f08e1baf891508463f8c6653c258246225
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          architecture: x64
+      - name: Apply RustDesk Flutter engine and SDK patch
+        run: |
+          flutter precache --windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $engine = Join-Path $env:FLUTTER_ROOT 'bin/cache/artifacts/engine/windows-x64-release'
+          $archive = Join-Path $env:RUNNER_TEMP 'windows-x64-release.zip'
+          $unpacked = Join-Path $env:RUNNER_TEMP 'rustdesk-flutter-engine'
+          Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $unpacked
+          Copy-Item -Path (Join-Path $unpacked '*') -Destination $engine -Recurse -Force
+          $patch = Join-Path $env:GITHUB_WORKSPACE '.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff'
+          git -C $env:FLUTTER_ROOT apply $patch
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
+        with:
+          toolchain: '1.75'
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          prefix-key: windows-enhanced
+          key: x64
+      - name: Export native cache credentials
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+      - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: '9e593bb18ea69cc5095e012465dcd675a822ed0d'
+          doNotCache: false
+      - name: Install native dependencies
+        shell: bash
+        run: '"$VCPKG_ROOT/vcpkg" install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"'
+      - name: Build RustDesk
+        run: python build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: topmostwindow-artifacts-x64
+          path: ${{ env.WINDOWS_BUNDLE }}
+      - name: Bundle virtual display driver
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'usbmmidd_v2.zip'
+          $unpacked = Join-Path $env:RUNNER_TEMP 'rustdesk-display-driver'
+          Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $unpacked
+          $driverPath = Join-Path $env:WINDOWS_BUNDLE 'usbmmidd_v2'
+          New-Item -ItemType Directory -Path $driverPath | Out-Null
+          $exclude = @('Win32', 'deviceinstaller64.exe', 'deviceinstaller.exe', 'usbmmidd.bat')
+          Get-ChildItem -LiteralPath (Join-Path $unpacked 'usbmmidd_v2') |
+            Where-Object { $_.Name -notin $exclude } |
+            Copy-Item -Destination $driverPath -Recurse
+      - name: Verify application bundle
+        run: |
+          $requiredFiles = @(
+            'rustdesk.exe', 'librustdesk.dll', 'flutter_windows.dll',
+            'WindowInjection.dll', 'dylib_virtual_display.dll', 'data/app.so', 'data/icudtl.dat'
+          )
+          foreach ($file in $requiredFiles) {
+            if (-not (Test-Path -LiteralPath (Join-Path $env:WINDOWS_BUNDLE $file) -PathType Leaf)) {
+              throw "Windows bundle is missing $file"
+            }
+          }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: windows-enhanced-x64-unsigned
+          path: ${{ env.WINDOWS_BUNDLE }}/
+          if-no-files-found: error
+          retention-days: 14
