@@ -1416,10 +1416,10 @@ class InputModel {
   /// Send scroll event with scroll distance [y].
   Future<void> scroll(int y) async {
     if (isViewCamera) return;
+    final event = <String, dynamic>{'id': id, 'type': 'wheel', 'y': y.toString()};
+    _keepVirtualPointerInFocus(event);
     await bind.sessionSendMouse(
-        sessionId: sessionId,
-        msg: json
-            .encode(modify({'id': id, 'type': 'wheel', 'y': y.toString()})));
+        sessionId: sessionId, msg: json.encode(modify(event)));
   }
 
   /// Reset key modifiers to false, including [shift], [ctrl], [alt] and [command].
@@ -1441,9 +1441,23 @@ class InputModel {
   /// Used for side button releases that must go through even if permissions
   /// changed after the matching down was sent.
   Future<void> _sendMouseUnchecked(String type, MouseButtons button) async {
+    final event = <String, dynamic>{'type': type, 'buttons': button.value};
+    if (type == 'down') _keepVirtualPointerInFocus(event);
     await bind.sessionSendMouse(
-        sessionId: sessionId,
-        msg: json.encode(modify({'type': type, 'buttons': button.value})));
+        sessionId: sessionId, msg: json.encode(modify(event)));
+  }
+
+  void _keepVirtualPointerInFocus(Map<String, dynamic> event) {
+    final ffi = parent.target;
+    final focus = ffi?.canvasModel.windowFocus;
+    if (ffi == null || focus == null) return;
+    final point = focus.desktopToLocal(ffi.cursorModel.offset);
+    if (focus.viewport.intersect(focus.destination).contains(point)) return;
+    final target = focus.localToDesktop(point, clamp: true);
+    if (target == null) return;
+    ffi.cursorModel.moveLocal(point.dx, point.dy);
+    event['focus_x'] = '${target.dx.toInt()}';
+    event['focus_y'] = '${target.dy.toInt()}';
   }
 
   /// Send mouse press event.

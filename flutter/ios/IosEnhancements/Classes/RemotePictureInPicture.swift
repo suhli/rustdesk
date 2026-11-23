@@ -317,7 +317,7 @@ final class RemotePictureInPicture: NSObject, AVPictureInPictureControllerDelega
         paused = false
         if let start = activeStart {
             let elapsed = CACurrentMediaTime() - start
-            NSLog("Remote PiP displayed %d frames in %.2f s (%.1f fps)", frames, elapsed, Double(frames) / max(elapsed, 0.001))
+            NSLog("Remote PiP queued %d video frames in %.2f s (%.1f fps)", frames, elapsed, Double(frames) / max(elapsed, 0.001))
         }
         activeStart = nil
         report(restoringUI ? "restored" : "stopped")

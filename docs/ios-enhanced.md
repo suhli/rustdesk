@@ -195,13 +195,13 @@ Rust 把现有桌面视频解码后的 BGRA 帧交给 `AVSampleBufferDisplayLaye
 
 画中画期间使用原有连接、解码器和 Tailnet 转发器。返回远控页使用同一会话。Rust 确认连接中断后，画中画相关的传输失败最多交给现有重连流程自动尝试两次。后台关闭画中画后恢复 Tailnet 的后台空闲策略。iOS 可以挂起画中画或应用进程，锁屏、网络切换及内存压力下的持久在线情况需分别实测。
 
-Xcode 使用 `UIBackgroundModes` 的 `audio` 能力。需要在正常签名安装和 LiveContainer 下分别验证，因为后者的宿主进程控制能力和系统后台归属。开启会变化的远端内容，在 iPhone 与 iPad 上分别验证自动开启、手动启停、恢复 UI、锁屏及 Wi-Fi/蜂窝切换。在 Console 中记录 `Remote PiP`、`iOS Tailnet resumed` 和 `iOS remote video rendered`，并核对远端是否保持相同连接。同一静态画面可能没有后续帧，可用带秒数的时钟或持续更新的应用来测量恢复时间。
+Xcode 使用 `UIBackgroundModes` 的 `audio` 能力。需要在正常签名安装和 LiveContainer 下分别验证，因为后者的宿主进程控制能力和系统后台归属。开启会变化的远端内容，在 iPhone 与 iPad 上分别验证自动开启、手动启停、恢复 UI、锁屏及 Wi-Fi/蜂窝切换。在 Console 中记录 `Remote PiP`、`iOS Tailnet resumed` 和 `iOS remote frame available`，并核对远端是否保持相同连接。日志记录样本缓冲入队帧率与回前台后 Flutter 收到首帧的时间。静态画面可能没有后续帧，可用带秒数的时钟或持续更新的应用测量。参见 [Apple AVKit 文档](https://developer.apple.com/documentation/avkit/avpictureinpicturecontroller/init(contentsource:))。
 
 ### Windows 原生触控
 
 iOS 和 Android 会话的“更多”菜单仅在 Windows 被控端报告触控注入能力、且允许键鼠操作时显示“Windows 原生触控”。选择会按被控设备保存。启用后手指可以同时控制最多 10 个触点。坐标使用当前捕获显示器的桌面像素坐标，支持原点在主屏左侧或上方的显示器。Windows 接收端使用系统触控注入 API，并限制新触点进入默认交互桌面。
 
-验收时用支持 Windows Touch 的应用检查单指按住、拖动、双指缩放和快速交替抬起。保持触点按下时切换模式、撤销键鼠权限、退后台或断开连接，然后重新进入同一应用检查触点是否释放。再用左右布局、混合 DPI、旋转显示器和旧版被控端重复。遇到安全桌面或触控注入失败时，现有鼠标模式仍可从工具栏选择。
+验收时用支持 Windows Touch 的应用检查单指按住、拖动、双指缩放和快速交替抬起。保持触点按下时切换模式、撤销键鼠权限、退后台或断开连接，然后重新进入同一应用检查触点是否释放。再用左右布局、混合 DPI、旋转显示器和旧版被控端重复。遇到安全桌面或触控注入失败时，现有鼠标模式仍可从工具栏选择。参见 [Win32 触控注入文档](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-injecttouchinput)。
 
 ### 远程窗口专注
 
@@ -215,4 +215,22 @@ iOS 和 Android 会话的“更多”菜单仅在 Windows 被控端报告触控�
 
 每次只处理一个区域，窗口专注时只处理窗口裁剪区。普通帧优先绘制，只有匹配当前原始帧和裁剪的推理结果才会显示。间隔随实际处理时间增大。单次超过 100 ms、GPU 着色器加载失败、区域超过 655,360 像素或最长边超过 1,920 像素时，使用普通采样。退后台时停止提交 AI 推理，PiP 使用自己的限帧视频源。
 
+原生后端也可运行这个规模的模型。ONNX Runtime Mobile 需要分发原生运行时，Core ML 和 NNAPI 分别需要 iOS 与 Android 的模型及桥接代码，直接使用 Metal 需要 iOS 专用渲染路径。当前实现使用 Flutter 的同一着色器资源进行两端分发和推理，以复用应用现有的图像管线。
+
 `Mobile video AI` 日志记录栅格化耗时、处理帧率、实际被选中绘制的增强帧率和输出像素缓冲估算。合成留出数据上亮度均方误差从 0.009331 降到 0.005564。该数字来自训练脚本的留出评估，实际远程视频质量、GPU 时延和功耗需要在目标手机上测量。
+
+## 移动增强的回归范围
+
+- `flutter/lib/mobile/pages/remote_page.dart` 在远控页面创建和释放时管理移动增强的资源，并在原有工具栏和画布挂接设置、触控、窗口专注与画质渲染。`flutter/lib/mobile/ios/settings.dart` 和 `session_toolbar.dart` 提供原生画中画入口及持久化选项。
+- `flutter/lib/mobile/ios/tailnet.dart` 直接读取远控页面的会话所有权，在后台暂停状态查询并在前台读取原生状态。`flutter/ios/IosEnhancements/Classes/IosEnhancements.swift` 和 `libs/ios_tailnet/{tailnet.go,cmd/ios/main.go}` 让启动配置去重并报告节点及转发器状态。
+- `flutter/ios/Runner/{AppDelegate.swift,SceneDelegate.swift,Runner-Bridging-Header.h,Info.plist}` 和 `flutter/ios/IosEnhancements/IosEnhancements.podspec` 注册 Apple 媒体框架、场景事件和内部帧回调。`src/platform/mod.rs` 按平台注册新增实现。
+- `src/client/io_loop.rs` 在 iOS 桌面的视频线程将已解码帧送入画中画，并在移动端传递窗口元数据。`src/flutter.rs`、`src/flutter_ffi.rs` 和 `src/ui_session_interface.rs` 用现有绑定发送移动触点、查询窗口及按序发送定位和点击。`flutter/lib/models/{model.dart,input_model.dart}` 在窗口专注时提供统一坐标和光标变换，并把已确认的连接错误交给画中画恢复逻辑。
+- `libs/base/protos/message.proto` 添加可选触点及窗口消息，`libs/base/src/lib.rs` 验证触点阶段和有符号坐标。`src/server/{connection.rs,input_service.rs}` 在已授权的 Windows 输入和屏幕会话内处理这些能力并释放触点。新能力从 Windows 被控端的现有能力字段协商。
+- `flutter/pubspec.yaml` 注册客户端模型资源，`src/lang/*.rs` 增加设置和工具栏文案。`flutter/test/ios_tailnet_test.dart` 验证后台资源策略，`.github/workflows/ios-enhanced.yml` 运行新增的几何和模型测试。
+
+## 本地验证与真机验收
+
+- 使用 Flutter 3.24.5 在 Windows 上运行完整 `flutter test`，202 项通过，1 项跳过。重点回归覆盖 Tailnet 后台保留、恢复时不重启、后台关闭画中画后释放资源、三种窗口几何及 GPU 模型着色器推理。针对改动的 Flutter 静态检查无错误。
+- `cargo test --offline -p base --lib` 有 19 项通过，3 项因 Windows 符号链接权限跳过。Windows 窗口快照通过本机独立编译和枚举冒烟检查。Rust 的 PiP 帧回调通过合成帧的字节步长检查。带 Flutter 功能的完整 Rust 构建在此工作区缺少 `opus/opus_multistream.h` 和 `vpx/vp8.h`。
+- `libs/ios_tailnet` 的 `go test -count=1 ./...` 和 `go vet ./...` 通过。回环代理测试使用本机回环连接，实际 Headscale 节点和第三方 API 路由仍需端到端验收。
+- Windows 工作区验证了 iOS `Info.plist` 中的后台媒体声明。Swift/Xcode 构建、正常签名 IPA、LiveContainer、iPhone/iPad 真机 PiP 保活、Android 真机和实体 Windows 多点触控均待验证。真机后台恢复耗时、实际显示帧率、内存和功耗也尚无实测结果。合并前优先完成 iOS 真机与签名 IPA 的验收。

@@ -66,8 +66,14 @@ pub(crate) fn cancellation() -> PointerDeviceEvent {
 #[derive(Default)]
 struct Contacts {
     owner: Option<i32>,
-    points: BTreeMap<u32, POINT>,
+    points: BTreeMap<u32, ActiveContact>,
     initialized: bool,
+}
+
+#[derive(Clone, Copy)]
+struct ActiveContact {
+    injection_id: u32,
+    point: POINT,
 }
 
 pub(crate) fn handle(contact: &NativeTouchContact, connection: i32) {
@@ -85,26 +91,41 @@ pub(crate) fn handle(contact: &NativeTouchContact, connection: i32) {
         return;
     }
     let prior = state.points.get(&contact.id).copied();
-    let (point, flags) = match phase {
+    let position = POINT {
+        x: contact.x,
+        y: contact.y,
+    };
+    let (active, flags) = match phase {
         Phase::Down if prior.is_none() && state.points.len() < MAX_CONTACTS => {
             if !on_default_input_desktop() {
                 return;
             }
+            let Some(injection_id) = (0..MAX_CONTACTS as u32).find(|id| {
+                !state
+                    .points
+                    .values()
+                    .any(|active| active.injection_id == *id)
+            }) else {
+                return;
+            };
             (
-                POINT {
-                    x: contact.x,
-                    y: contact.y,
+                ActiveContact {
+                    injection_id,
+                    point: position,
                 },
                 winuser::POINTER_FLAG_DOWN | CONTACT,
             )
         }
-        Phase::Move if prior.is_some() => (
-            POINT {
-                x: contact.x,
-                y: contact.y,
-            },
-            UPDATE,
-        ),
+        Phase::Move => {
+            let Some(prior) = prior else { return };
+            (
+                ActiveContact {
+                    point: position,
+                    ..prior
+                },
+                UPDATE,
+            )
+        }
         Phase::Up | Phase::Cancel => {
             let Some(prior) = prior else { return };
             let cancelled = if phase == Phase::Cancel {
@@ -116,7 +137,8 @@ pub(crate) fn handle(contact: &NativeTouchContact, connection: i32) {
         }
         _ => return,
     };
-    if unsafe { winuser::MonitorFromPoint(point, winuser::MONITOR_DEFAULTTONULL) }.is_null() {
+    if unsafe { winuser::MonitorFromPoint(active.point, winuser::MONITOR_DEFAULTTONULL) }.is_null()
+    {
         if prior.is_some() {
             state.cancel(api);
         }
@@ -136,12 +158,12 @@ pub(crate) fn handle(contact: &NativeTouchContact, connection: i32) {
         state.initialized = true;
     }
     let mut frame = Vec::with_capacity(MAX_CONTACTS);
-    for (&id, &point) in &state.points {
+    for (&id, &other) in &state.points {
         if id != contact.id {
-            frame.push(touch(id, point, UPDATE));
+            frame.push(touch(other, UPDATE));
         }
     }
-    frame.push(touch(contact.id, point, flags));
+    frame.push(touch(active, flags));
     if let Err(error) = inject(api, &frame) {
         hbb_common::throttled_log!(
             Duration::from_secs(5),
@@ -154,7 +176,7 @@ pub(crate) fn handle(contact: &NativeTouchContact, connection: i32) {
     if phase == Phase::Up || phase == Phase::Cancel {
         state.points.remove(&contact.id);
     } else {
-        state.points.insert(contact.id, point);
+        state.points.insert(contact.id, active);
     }
     state.owner = (!state.points.is_empty()).then_some(connection);
 }
@@ -162,11 +184,11 @@ pub(crate) fn handle(contact: &NativeTouchContact, connection: i32) {
 const CONTACT: UINT = winuser::POINTER_FLAG_INRANGE | winuser::POINTER_FLAG_INCONTACT;
 const UPDATE: UINT = winuser::POINTER_FLAG_UPDATE | CONTACT;
 
-fn touch(id: u32, point: POINT, flags: UINT) -> POINTER_TOUCH_INFO {
+fn touch(active: ActiveContact, flags: UINT) -> POINTER_TOUCH_INFO {
     let mut touch = unsafe { mem::zeroed::<POINTER_TOUCH_INFO>() };
     touch.pointerInfo.pointerType = winuser::PT_TOUCH;
-    touch.pointerInfo.pointerId = id;
-    touch.pointerInfo.ptPixelLocation = point;
+    touch.pointerInfo.pointerId = active.injection_id;
+    touch.pointerInfo.ptPixelLocation = active.point;
     touch.pointerInfo.pointerFlags = flags;
     touch
 }
@@ -193,8 +215,8 @@ impl Contacts {
             let flags = winuser::POINTER_FLAG_UP | winuser::POINTER_FLAG_CANCELED;
             let frame: Vec<_> = self
                 .points
-                .iter()
-                .map(|(&id, &point)| touch(id, point, flags))
+                .values()
+                .map(|&active| touch(active, flags))
                 .collect();
             if let Err(error) = inject(api, &frame) {
                 hbb_common::throttled_log!(

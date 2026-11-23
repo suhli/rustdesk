@@ -807,7 +807,9 @@ impl Connection {
                             if &name == "keyboard" {
                                 conn.keyboard = enabled;
                                 #[cfg(windows)]
-                                if !enabled { conn.cancel_native_touch(); }
+                                if !enabled {
+                                    conn.cancel_native_touch();
+                                }
                                 conn.send_permission(Permission::Keyboard, enabled).await;
                                 if let Some(s) = conn.server.upgrade() {
                                     s.write().unwrap().subscribe(
@@ -2493,7 +2495,10 @@ impl Connection {
 
     #[cfg(windows)]
     fn cancel_native_touch(&self) {
-        self.input_pointer(crate::platform::windows_touch::cancellation(), self.inner.id());
+        self.input_pointer(
+            crate::platform::windows_touch::cancellation(),
+            self.inner.id(),
+        );
     }
 
     #[inline]
@@ -5077,7 +5082,9 @@ impl Connection {
             if q != BoolOption::NotSet {
                 self.disable_keyboard = q == BoolOption::Yes;
                 #[cfg(windows)]
-                if self.disable_keyboard { self.cancel_native_touch(); }
+                if self.disable_keyboard {
+                    self.cancel_native_touch();
+                }
                 if let Some(s) = self.server.upgrade() {
                     s.write().unwrap().subscribe(
                         super::clipboard_service::NAME,
@@ -5330,7 +5337,10 @@ impl Connection {
 
     #[cfg(windows)]
     async fn send_remote_windows(&mut self) {
-        if !self.is_remote() || !self.peer_keyboard_enabled() || !self.remote_windows.accept_request() {
+        if !self.is_remote()
+            || !self.peer_keyboard_enabled()
+            || !self.remote_windows.accept_request()
+        {
             return;
         }
         match tokio::task::spawn_blocking(crate::platform::windows_focus::snapshot).await {
@@ -5341,7 +5351,11 @@ impl Connection {
                 message.set_misc(misc);
                 self.send(message).await;
             }
-            Err(error) => log::warn!("Window enumeration task failed: {error}"),
+            Err(error) => hbb_common::throttled_log!(
+                std::time::Duration::from_secs(5),
+                warn,
+                "Window enumeration task failed: {error}"
+            ),
         }
     }
 

@@ -2270,7 +2270,9 @@ impl<T: InvokeUiSession> Remote<T> {
                         self.audio_sender.send(MediaData::AudioFormat(f)).ok();
                     }
                     #[cfg(all(feature = "flutter", any(target_os = "android", target_os = "ios")))]
-                    Some(misc::Union::RemoteWindows(snapshot)) => self.handler.ui_handler.remote_windows(snapshot),
+                    Some(misc::Union::RemoteWindows(snapshot)) => {
+                        self.handler.ui_handler.remote_windows(snapshot);
+                    }
                     Some(misc::Union::ChatMessage(c)) => {
                         self.handler.new_message(c.text);
                     }

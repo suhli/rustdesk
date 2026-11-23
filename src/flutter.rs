@@ -958,11 +958,20 @@ impl InvokeUiSession for FlutterHandler {
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
     fn remote_windows(&self, snapshot: RemoteWindowSnapshot) {
-        let windows: Vec<_> = snapshot.windows.into_iter().take(100).map(|window| {
-            serde_json::json!({"id": window.id, "app": window.app, "title": window.title,
-                "x": window.x, "y": window.y, "width": window.width, "height": window.height})
-        }).collect();
-        self.push_event("remote_windows", &[("windows", &serde_json::Value::Array(windows).to_string())], &[]);
+        let windows: Vec<_> = snapshot
+            .windows
+            .into_iter()
+            .take(100)
+            .map(|window| {
+                serde_json::json!({"id": window.id, "app": window.app, "title": window.title,
+                    "x": window.x, "y": window.y, "width": window.width, "height": window.height})
+            })
+            .collect();
+        self.push_event(
+            "remote_windows",
+            &[("windows", &serde_json::Value::Array(windows).to_string())],
+            &[],
+        );
     }
 
     fn set_multiple_windows_session(&self, sessions: Vec<WindowsSession>) {
@@ -2002,7 +2011,13 @@ fn session_send_native_touch(session_id: SessionID, value: &serde_json::Value) {
         return;
     };
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.send_native_touch(NativeTouchContact { phase: phase.into(), id, x, y, ..Default::default() });
+        session.send_native_touch(NativeTouchContact {
+            phase: phase.into(),
+            id,
+            x,
+            y,
+            ..Default::default()
+        });
     }
 }
 

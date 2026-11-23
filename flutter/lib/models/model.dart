@@ -934,6 +934,7 @@ class FfiModel with ChangeNotifier {
       enterUserLoginAndPasswordDialog(
           sessionId, dialogManager, 'terminal-admin-login-tip');
     } else if (type == 'restarting') {
+      onRemoteTransportError?.call(false, text);
       // Treat restart messages as reconnect control events. Rust still sends
       // title/text for legacy UI and translation reuse; Flutter keeps the last
       // frame briefly, then shows the Connecting overlay.
@@ -954,6 +955,7 @@ class FfiModel with ChangeNotifier {
         });
       }
     } else if (type == 'restarting-show') {
+      onRemoteTransportError?.call(false, text);
       _restartReconnectDelayTimer?.cancel();
       _restartReconnectDelayTimer = null;
       reconnect(dialogManager, sessionId, false);
@@ -966,6 +968,7 @@ class FfiModel with ChangeNotifier {
     } else if (type == 'elevation-error') {
       showElevationError(sessionId, type, title, text, dialogManager);
     } else if (type == 'relay-hint' || type == 'relay-hint2') {
+      if (title == 'Connection Error') onRemoteTransportError?.call(false, text);
       showRelayHintDialog(sessionId, type, title, text, dialogManager, peerId);
     } else if (text == kMsgboxTextWaitingForImage) {
       showConnectedWaitingForImage(dialogManager, sessionId, type, title, text);

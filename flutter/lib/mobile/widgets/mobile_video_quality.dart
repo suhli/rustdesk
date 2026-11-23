@@ -65,8 +65,9 @@ class MobileVideoQuality extends ChangeNotifier {
 
   MobileVideoFrame sample(ui.Image image, Rect region) {
     final original = (image: image, region: region);
-    if (mode != MobileVideoQualityMode.ai || !_foreground || _fallback)
+    if (mode != MobileVideoQualityMode.ai || !_foreground || _fallback) {
       return original;
+    }
     if (region.isEmpty ||
         region.longestSide > 1920 ||
         region.width * region.height > maxInputPixels) {

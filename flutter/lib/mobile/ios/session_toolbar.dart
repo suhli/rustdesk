@@ -81,7 +81,7 @@ class _IosSessionToolbarState extends State<IosSessionToolbar> {
                               Icons.desktop_windows, 'Display', widget.display),
                           if (widget.pictureInPicture != null)
                             _button(Icons.picture_in_picture_alt,
-                                'Picture in Picture', widget.pictureInPicture),
+                                'Picture in picture', widget.pictureInPicture),
                           _button(Icons.screen_rotation, 'Rotate screen',
                               widget.rotate),
                           _button(Icons.playlist_play, 'Custom macros',

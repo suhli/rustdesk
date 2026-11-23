@@ -167,7 +167,13 @@ class RemoteWindowFocus extends ChangeNotifier {
       final windows = _windows!;
       for (final window in windows) {
         if (window.id != selection.id) continue;
-        if (window.rect != selection.rect) _select(window);
+        final pi = ffi.ffiModel.pi;
+        final display = pi.getDisplayRect(pi.currentDisplay);
+        if (window.rect != selection.rect ||
+            display == null ||
+            window.rect.intersect(display).isEmpty) {
+          _select(window);
+        }
         if (_picking) notifyListeners();
         return;
       }
@@ -199,14 +205,16 @@ class RemoteWindowFocus extends ChangeNotifier {
     selected = window;
     if (index != pi.currentDisplay) {
       ffi.canvasModel.windowFocus = null;
-      openMonitorInTheSameTab(index, ffi, pi);
+      openMonitorInTheSameTab(index, ffi, pi,
+          updateCursorPos: false, recordSelection: false);
     }
     _displayChanged();
     notifyListeners();
   }
 
   void _displayChanged() {
-    final rect = ffi.ffiModel.rect;
+    final pi = ffi.ffiModel.pi;
+    final rect = pi.getDisplayRect(pi.currentDisplay);
     final window = selected;
     Rect? crop;
     if (rect != null && window != null) {

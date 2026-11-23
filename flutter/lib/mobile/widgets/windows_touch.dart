@@ -17,6 +17,7 @@ class WindowsTouchInput {
   final _contacts = <int, Offset>{};
   Future<void> _pending = Future.value();
   Timer? _hold;
+  bool _disposed = false;
 
   bool get supported =>
       ffi.ffiModel.isPeerWindows &&
@@ -79,6 +80,12 @@ class WindowsTouchInput {
     _send('cancel-all', 0, Offset.zero);
   }
 
+  void dispose() {
+    _disposed = true;
+    _stopHold();
+    _contacts.clear();
+  }
+
   void _stopHold() {
     _hold?.cancel();
     _hold = null;
@@ -95,6 +102,7 @@ class WindowsTouchInput {
       },
     });
     _pending = _pending.then((_) async {
+      if (_disposed) return;
       await bind.sessionSendPointer(sessionId: ffi.sessionId, msg: message);
     }).catchError((Object error) {
       debugPrint('Windows touch input could not be sent: $error');

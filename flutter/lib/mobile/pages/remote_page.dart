@@ -188,10 +188,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       // side effect of registering callbacks (inside toolbarControls) is
       // what we want here.
       if (mounted) {
-        if (_windowsTouchSupported) {
-          _nativeTouch.value = bind.mainGetPeerOptionSync(
-                  id: widget.id, key: windowsNativeTouchOption) == 'Y';
-        }
+        _restoreWindowsTouch();
         _iosPip?.attach().then((_) {
           if (mounted) setState(() {});
         });
@@ -224,7 +221,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Future<void> dispose() async {
     _iosMacros.cancel();
     _iosPip?.dispose();
-    _windowsTouch.cancel();
+    _windowsTouch.dispose();
     _windowFocus.dispose();
     _videoQuality?.dispose();
     if (isIOS) unawaited(iosOrientation.leave());
@@ -780,6 +777,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   bool get _windowsTouchSupported =>
       !isWeb && (isAndroid || isIOS) && _windowsTouch.supported;
 
+  void _restoreWindowsTouch() {
+    final model = gFFI.ffiModel;
+    if (isWeb || !(isAndroid || isIOS) || !model.isPeerWindows) return;
+    if (bind.mainGetPeerOptionSync(id: widget.id, key: windowsNativeTouchOption) != 'Y') return;
+    _nativeTouch.value = _windowsTouchSupported;
+    if (!_nativeTouch.value && model.touchMode) model.toggleTouchMode();
+  }
+
   void _setWindowsTouch(bool enabled) {
     if (!enabled) _windowsTouch.cancel();
     _nativeTouch.value = enabled;
@@ -960,7 +965,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               _iosMacros.show(context, ffi: gFFI, sessionActive: () => mounted)));
       if (!_iosToolbar && _iosPip?.available == true) {
         menus.add(TTextMenu(
-            child: Text(translate('Picture in Picture')),
+            child: Text(translate('Picture in picture')),
             onPressed: _iosPip?.toggle));
       }
     }

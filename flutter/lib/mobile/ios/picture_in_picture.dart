@@ -74,7 +74,12 @@ class IosRemotePictureInPicture {
   }
 
   void _displayChanged() {
-    if (_display != ffi.ffiModel.pi.currentDisplay) unawaited(_configure());
+    if (_display == ffi.ffiModel.pi.currentDisplay) return;
+    scheduleMicrotask(() {
+      if (_attached && _display != ffi.ffiModel.pi.currentDisplay) {
+        unawaited(_configure());
+      }
+    });
   }
 
   void setCrop(Rect? crop) {
@@ -110,7 +115,7 @@ class IosRemotePictureInPicture {
         EmbeddedTailnet.instance.remotePictureInPictureClosed(sessionOwner);
       }
       if (state == 'failed' && _manualStart && _foreground) {
-        showToast(translate('Picture in Picture is unavailable'));
+        showToast(translate('Picture in picture is unavailable'));
       }
       _manualStart = false;
     }
@@ -121,7 +126,7 @@ class IosRemotePictureInPicture {
     _manualStart = !_active;
     if (await _call<bool>('toggle') != true) {
       _manualStart = false;
-      if (_attached) showToast(translate('Picture in Picture is unavailable'));
+      if (_attached) showToast(translate('Picture in picture is unavailable'));
     } else if (_attached && _manualStart) {
       sessionRefreshVideo(ffi.sessionId, ffi.ffiModel.pi);
     }
@@ -152,7 +157,7 @@ class IosRemotePictureInPicture {
     if (resume != null) {
       _foregroundResume = null;
       debugPrint(
-          'iOS remote video rendered ${resume.elapsedMilliseconds}ms after resume');
+          'iOS remote frame available ${resume.elapsedMilliseconds}ms after resume');
     }
     if (_live) return;
     _live = true;

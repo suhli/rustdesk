@@ -202,10 +202,10 @@ class _IosSettingsPageState extends State<IosSettingsPage> {
                   _switch('Floating session toolbar',
                       IosPreferences.floatingToolbar, (v) => _set('toolbar', v),
                       detail: 'Applies to the next remote session.'),
-                  _switch('Start Picture in Picture automatically',
+                  _switch('Start picture in picture automatically',
                       iosAutomaticPip, (v) => _set('pip-automatic', v)),
                   ListTile(
-                      title: Text(translate('Picture in Picture quality')),
+                      title: Text(translate('Picture in picture quality')),
                       trailing: DropdownButton<RemotePipQuality>(
                         value: iosPipQuality,
                         items: const {
