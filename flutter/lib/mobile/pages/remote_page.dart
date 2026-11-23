@@ -28,6 +28,7 @@ import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
 import '../widgets/windows_touch.dart';
 import '../widgets/remote_window_focus.dart';
+import '../widgets/mobile_video_quality.dart';
 import '../ios/preferences.dart';
 import '../ios/orientation.dart';
 import '../ios/picture_in_picture.dart';
@@ -109,6 +110,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   IosRemotePictureInPicture? _iosPip;
   final _windowsTouch = WindowsTouchInput(gFFI);
   final _nativeTouch = false.obs;
+  final MobileVideoQuality? _videoQuality = !isWeb && (isIOS || isAndroid)
+      ? MobileVideoQuality() : null;
   late final _windowFocus = RemoteWindowFocus(gFFI,
       onCrop: (crop) => _iosPip?.setCrop(crop));
 
@@ -223,6 +226,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     _iosPip?.dispose();
     _windowsTouch.cancel();
     _windowFocus.dispose();
+    _videoQuality?.dispose();
     if (isIOS) unawaited(iosOrientation.leave());
     HardwareKeyboard.instance.removeHandler(_handleLocalKeyEvent);
     WidgetsBinding.instance.removeObserver(this);
@@ -264,6 +268,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _videoQuality?.setForeground(state == AppLifecycleState.resumed);
     if (state != AppLifecycleState.resumed) _iosMacros.cancel();
     if (state != AppLifecycleState.resumed) _windowsTouch.cancel();
     if (state == AppLifecycleState.resumed) {
@@ -805,10 +810,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         color: MyTheme.canvasColor,
         child: Stack(children: () {
           final focusing = _windowFocus.selected != null;
-          final desktop = ImagePaint(ffiModel: gFFI.ffiModel);
+          final desktop = ImagePaint(ffiModel: gFFI.ffiModel, enhancement: _videoQuality);
           final paints = [
             if (focusing)
-              RemoteWindowFocusView(focus: _windowFocus, cursor: paintCursor,
+              RemoteWindowFocusView(focus: _windowFocus, cursor: paintCursor, enhancement: _videoQuality,
                 desktop: Stack(children: [desktop, if (paintCursor) CursorPaint(widget.id)]))
             else desktop,
             Positioned(
@@ -927,6 +932,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final y = size.height;
     final mobileActionMenus = _getMobileActionMenus();
     final menus = toolbarControls(context, id, gFFI);
+    if (_videoQuality != null) {
+      menus.add(TTextMenu(child: Text(translate('Local video enhancement')),
+          onPressed: _chooseVideoQuality));
+    }
     if (_windowFocus.supported) {
       menus.add(TTextMenu(child: Text(translate('Focus a remote window')),
           onPressed: () => _windowFocus.pick(context)));
@@ -1003,6 +1012,25 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       ),
     );
     if (mounted && value != null) _windowFocus.setFit(value);
+  }
+
+  Future<void> _chooseVideoQuality() async {
+    final quality = _videoQuality;
+    if (quality == null) return;
+    final value = await showDialog<MobileVideoQualityMode>(context: context,
+      builder: (context) => SimpleDialog(title: Text(translate('Local video enhancement')),
+        children: const {
+          MobileVideoQualityMode.off: 'Off',
+          MobileVideoQualityMode.standard: 'GPU enhancement',
+          MobileVideoQualityMode.ai: 'AI super-resolution',
+        }.entries.map((entry) => ListTile(
+            title: Text(translate(entry.value)),
+            selected: entry.key == quality.mode,
+            onTap: () => Navigator.pop(context, entry.key),
+          )).toList(),
+      ),
+    );
+    if (mounted && value != null) quality.setMode(value);
   }
 
   void _registerMobileChatShortcut() {
@@ -1350,10 +1378,15 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
 
 class ImagePaint extends StatelessWidget {
   final FfiModel ffiModel;
-  ImagePaint({Key? key, required this.ffiModel}) : super(key: key);
+  final MobileVideoQuality? enhancement;
+  ImagePaint({Key? key, required this.ffiModel, this.enhancement}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => enhancement == null
+      ? _buildFrame(context)
+      : AnimatedBuilder(animation: enhancement!, builder: (context, _) => _buildFrame(context));
+
+  Widget _buildFrame(BuildContext context) {
     final m = Provider.of<ImageModel>(context);
     final c = Provider.of<CanvasModel>(context);
     var s = c.scale;
@@ -1364,6 +1397,15 @@ class ImagePaint extends StatelessWidget {
       }
     }
     final adjust = c.getAdjustY();
+    final quality = enhancement;
+    final image = m.image;
+    if (quality != null && quality.mode != MobileVideoQualityMode.off && image != null && s.isFinite && s > 0) {
+      final region = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+      final frame = quality.sample(image, region);
+      final destination = Rect.fromLTWH((c.x / s).truncateToDouble() * s,
+          ((c.y + adjust) / s).truncateToDouble() * s, region.width * s, region.height * s);
+      return CustomPaint(painter: MobileEnhancedFramePainter(frame, destination, quality.filterQuality));
+    }
     return CustomPaint(
       painter: ImagePainter(
           image: m.image, x: c.x / s, y: (c.y + adjust) / s, scale: s),

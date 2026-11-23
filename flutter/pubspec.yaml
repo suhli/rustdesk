@@ -158,6 +158,9 @@ flutter:
   assets:
     - assets/
 
+  shaders:
+    - shaders/mobile_super_resolution.frag
+
   fonts:
     - family: GestureIcons
       fonts:

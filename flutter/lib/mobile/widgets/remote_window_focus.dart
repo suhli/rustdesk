@@ -9,6 +9,7 @@ import '../../common.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../../models/window_focus_geometry.dart';
+import 'mobile_video_quality.dart';
 
 const _fitOption = 'mobile-window-focus-fit';
 
@@ -248,15 +249,17 @@ class RemoteWindowFocusView extends StatelessWidget {
       {super.key,
       required this.focus,
       required this.cursor,
+      this.enhancement,
       required this.desktop});
 
   final RemoteWindowFocus focus;
   final bool cursor;
   final Widget desktop;
+  final MobileVideoQuality? enhancement;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-      animation: focus,
+      animation: Listenable.merge([focus, enhancement]),
       builder: (context, _) {
         final chosen = focus.selected;
         if (chosen == null) return desktop;
@@ -279,20 +282,29 @@ class RemoteWindowFocusView extends StatelessWidget {
           final hotspot = cursorModel.image == null && cursorImage != null
               ? Offset(cursorImage.width / 2, cursorImage.height / 2)
               : Offset(cursorModel.hotx, cursorModel.hoty);
+          final quality = enhancement;
+          final frame = quality?.sample(image, geometry.source) ??
+              (image: image, region: geometry.source);
           return SizedBox.expand(
               child: CustomPaint(
-                  painter: _FocusPainter(geometry, image, cursorImage,
-                      cursorModel.offset, hotspot)));
+                  painter: _FocusPainter(
+                      geometry,
+                      frame,
+                      quality?.filterQuality ?? FilterQuality.none,
+                      cursorImage,
+                      cursorModel.offset,
+                      hotspot)));
         });
       });
 }
 
 class _FocusPainter extends CustomPainter {
-  _FocusPainter(
-      this.geometry, this.image, this.cursor, this.position, this.hotspot);
+  _FocusPainter(this.geometry, this.frame, this.filterQuality, this.cursor,
+      this.position, this.hotspot);
 
   final WindowFocusGeometry geometry;
-  final ui.Image image;
+  final MobileVideoFrame frame;
+  final FilterQuality filterQuality;
   final ui.Image? cursor;
   final Offset position, hotspot;
 
@@ -300,7 +312,8 @@ class _FocusPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.clipRect(geometry.viewport);
-    canvas.drawImageRect(image, geometry.source, geometry.destination, Paint());
+    canvas.drawImageRect(frame.image, frame.region, geometry.destination,
+        Paint()..filterQuality = filterQuality);
     final shape = cursor;
     if (shape != null && geometry.desktopRect.contains(position)) {
       canvas.clipRect(geometry.destination);
@@ -317,7 +330,8 @@ class _FocusPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_FocusPainter old) =>
-      image != old.image ||
+      frame != old.frame ||
+      filterQuality != old.filterQuality ||
       cursor != old.cursor ||
       position != old.position ||
       hotspot != old.hotspot ||
