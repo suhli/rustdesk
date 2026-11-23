@@ -22,10 +22,12 @@ import '../../models/input_model.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../../models/shortcut_model.dart';
+import '../../models/window_focus_geometry.dart';
 import '../../utils/image.dart';
 import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
 import '../widgets/windows_touch.dart';
+import '../widgets/remote_window_focus.dart';
 import '../ios/preferences.dart';
 import '../ios/orientation.dart';
 import '../ios/picture_in_picture.dart';
@@ -107,6 +109,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   IosRemotePictureInPicture? _iosPip;
   final _windowsTouch = WindowsTouchInput(gFFI);
   final _nativeTouch = false.obs;
+  late final _windowFocus = RemoteWindowFocus(gFFI,
+      onCrop: (crop) => _iosPip?.setCrop(crop));
 
   final _blockableOverlayState = BlockableOverlayState();
 
@@ -218,6 +222,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     _iosMacros.cancel();
     _iosPip?.dispose();
     _windowsTouch.cancel();
+    _windowFocus.dispose();
     if (isIOS) unawaited(iosOrientation.leave());
     HardwareKeyboard.instance.removeHandler(_handleLocalKeyEvent);
     WidgetsBinding.instance.removeObserver(this);
@@ -795,11 +800,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       !gFFI.inputModel.relativeMouseMode.value;
 
   Widget getBodyForMobile() {
-    return Container(
+    final paintCursor = showCursorPaint;
+    return AnimatedBuilder(animation: _windowFocus, builder: (_, __) => Container(
         color: MyTheme.canvasColor,
         child: Stack(children: () {
+          final focusing = _windowFocus.selected != null;
+          final desktop = ImagePaint(ffiModel: gFFI.ffiModel);
           final paints = [
-            ImagePaint(ffiModel: gFFI.ffiModel),
+            if (focusing)
+              RemoteWindowFocusView(focus: _windowFocus, cursor: paintCursor,
+                desktop: Stack(children: [desktop, if (paintCursor) CursorPaint(widget.id)]))
+            else desktop,
             Positioned(
               top: 10,
               right: 10,
@@ -844,7 +855,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     ).workaroundFreezeLinuxMint(),
             ),
           ];
-          if (showCursorPaint) {
+          if (paintCursor && !focusing) {
             paints.add(CursorPaint(widget.id));
           }
           if (_nativeTouch.value && _windowsTouchSupported) return paints;
@@ -858,7 +869,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             ));
           }
           return paints;
-        }()));
+        }())));
   }
 
   Widget getBodyForDesktopWithListener() {
@@ -916,6 +927,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final y = size.height;
     final mobileActionMenus = _getMobileActionMenus();
     final menus = toolbarControls(context, id, gFFI);
+    if (_windowFocus.supported) {
+      menus.add(TTextMenu(child: Text(translate('Focus a remote window')),
+          onPressed: () => _windowFocus.pick(context)));
+      if (_windowFocus.selected != null) {
+        menus.add(TTextMenu(child: Text(translate('Window scaling')),
+            onPressed: _chooseWindowFit));
+        menus.add(TTextMenu(child: Text(translate('Exit window focus')),
+            onPressed: _windowFocus.clear));
+      }
+    }
     if (_windowsTouchSupported && gFFI.ffiModel.keyboard && !gFFI.ffiModel.viewOnly) {
       menus.add(TTextMenu(
           child: Text(translate(_nativeTouch.value
@@ -966,6 +987,22 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         }
       }
     }();
+  }
+
+  Future<void> _chooseWindowFit() async {
+    final value = await showDialog<WindowFocusFit>(context: context,
+      builder: (context) => SimpleDialog(title: Text(translate('Window scaling')),
+        children: const {
+          WindowFocusFit.contain: 'Contain',
+          WindowFocusFit.cover: 'Cover',
+          WindowFocusFit.stretch: 'Stretch',
+        }.entries.map((entry) => SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, entry.key),
+            child: Text(translate(entry.value)),
+          )).toList(),
+      ),
+    );
+    if (mounted && value != null) _windowFocus.setFit(value);
   }
 
   void _registerMobileChatShortcut() {

@@ -1940,7 +1940,8 @@ class InputModel {
     }
     final mediaData = MediaQueryData.fromView(
         WidgetsBinding.instance.platformDispatcher.views.first);
-    final adjustY = parent.target?.canvasModel.getAdjustY() ?? 0.0;
+    final canvas = parent.target?.canvasModel;
+    final adjustY = canvas?.windowFocus == null ? (canvas?.getAdjustY() ?? 0.0) : 0.0;
     return Offset(
       event.localPosition.dx - mediaData.padding.left,
       event.localPosition.dy - mediaData.padding.top - adjustY,
@@ -2015,9 +2016,19 @@ class InputModel {
       } else if (dy < 0) {
         dy = accel;
       }
-      bind.sessionSendMouse(
-          sessionId: sessionId,
-          msg: '{"type": "wheel", "x": "$dx", "y": "$dy"}');
+      final focus = parent.target?.canvasModel.windowFocus;
+      if (focus != null) {
+        final remote = focus.localToDesktop(_pointerPositionForRemoteCanvas(e));
+        if (remote == null) return;
+        bind.sessionSendMouse(sessionId: sessionId, msg: jsonEncode({
+          'type': 'wheel', 'x': '$dx', 'y': '$dy',
+          'focus_x': '${remote.dx.toInt()}', 'focus_y': '${remote.dy.toInt()}',
+        }));
+      } else {
+        bind.sessionSendMouse(
+            sessionId: sessionId,
+            msg: '{"type": "wheel", "x": "$dx", "y": "$dy"}');
+      }
     }
   }
 
@@ -2170,7 +2181,8 @@ class InputModel {
     }
     evt['type'] = type;
 
-    if (type == kMouseEventTypeDown && !_pointerMovedAfterEnter) {
+    final focused = parent.target?.canvasModel.windowFocus != null;
+    if (type == kMouseEventTypeDown && !_pointerMovedAfterEnter && !focused) {
       // Move mouse to the position of the down event first.
       lastMousePos = ui.Offset(x, y);
       refreshMousePos();
@@ -2196,6 +2208,10 @@ class InputModel {
     if (type != '') {
       evt['x'] = '0';
       evt['y'] = '0';
+      if (focused) {
+        evt['focus_x'] = '${pos.x.toInt()}';
+        evt['focus_y'] = '${pos.y.toInt()}';
+      }
     } else {
       evt['x'] = '${pos.x.toInt()}';
       evt['y'] = '${pos.y.toInt()}';
@@ -2248,6 +2264,15 @@ class InputModel {
     bool edgeScroll = false,
   }) {
     final ffiModel = parent.target!.ffiModel;
+    final focus = parent.target!.canvasModel.windowFocus;
+    if (focus != null) {
+      final local = Offset(x - CanvasModel.leftToEdge, y - CanvasModel.topToEdge);
+      final remote = focus.localToDesktop(local,
+          clamp: onExit || evtType == kMouseEventTypeUp || (isMove && buttons != 0));
+      if (remote == null) return null;
+      if (isMove) parent.target!.cursorModel.moveLocal(local.dx, local.dy);
+      return Point(remote.dx, remote.dy);
+    }
     CanvasCoords canvas =
         CanvasCoords.fromCanvasModel(parent.target!.canvasModel);
     Rect? rect = ffiModel.rect;

@@ -956,6 +956,15 @@ impl InvokeUiSession for FlutterHandler {
         )
     }
 
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    fn remote_windows(&self, snapshot: RemoteWindowSnapshot) {
+        let windows: Vec<_> = snapshot.windows.into_iter().take(100).map(|window| {
+            serde_json::json!({"id": window.id, "app": window.app, "title": window.title,
+                "x": window.x, "y": window.y, "width": window.width, "height": window.height})
+        }).collect();
+        self.push_event("remote_windows", &[("windows", &serde_json::Value::Array(windows).to_string())], &[]);
+    }
+
     fn set_multiple_windows_session(&self, sessions: Vec<WindowsSession>) {
         let mut msg_vec = Vec::new();
         let mut sessions = sessions;
@@ -1960,6 +1969,12 @@ pub fn session_send_pointer(session_id: SessionID, msg: String) {
                 Some("touch") => session_send_touch_event(session_id, v, alt, ctrl, shift, command),
                 #[cfg(any(target_os = "android", target_os = "ios"))]
                 Some("native-touch") => session_send_native_touch(session_id, v),
+                #[cfg(any(target_os = "android", target_os = "ios"))]
+                Some("remote-windows") => {
+                    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
+                        session.request_remote_windows();
+                    }
+                }
                 _ => {}
             },
             _ => {}

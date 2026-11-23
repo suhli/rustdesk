@@ -58,6 +58,8 @@ class WindowsTouchInput {
   }
 
   Offset? _map(Offset local, {required bool clamp}) {
+    final focus = ffi.canvasModel.windowFocus;
+    if (focus != null) return focus.localToDesktop(local, clamp: clamp);
     final rect = ffi.ffiModel.rect;
     if (rect == null || rect.isEmpty) return null;
     final remote = ffi.inputModel.handlePointerDevicePos(kPointerEventKindTouch,

@@ -43,6 +43,7 @@ import '../utils/image.dart' as img;
 import '../common/widgets/dialog.dart';
 import 'input_model.dart';
 import 'platform_model.dart';
+import 'window_focus_geometry.dart';
 import 'package:flutter_hbb/utils/scale.dart';
 
 import 'package:flutter_hbb/generated_bridge.dart'
@@ -136,6 +137,7 @@ class FfiModel with ChangeNotifier {
 
   Timer? timerScreenshot;
   bool Function(bool suggestedRetry, String message)? onRemoteTransportError;
+  ValueChanged<String>? onRemoteWindows;
 
   Rect? get rect => _rect;
   bool get isOriginalResolutionSet =>
@@ -344,6 +346,9 @@ class FfiModel with ChangeNotifier {
         handleSyncPeerInfo(evt, sessionId, peerId);
       } else if (name == 'sync_platform_additions') {
         handlePlatformAdditions(evt, sessionId, peerId);
+      } else if (name == 'remote_windows') {
+        final windows = evt['windows'];
+        if (windows is String) onRemoteWindows?.call(windows);
       } else if (name == 'connection_ready') {
         setConnectionType(peerId, evt['secure'] == 'true',
             evt['direct'] == 'true', evt['stream_type'] ?? '');
@@ -1923,6 +1928,7 @@ class ImageModel with ChangeNotifier {
   ui.Image? _image;
 
   ui.Image? get image => _image;
+  int? mobileImageDisplay;
 
   String id = '';
 
@@ -1995,6 +2001,7 @@ class ImageModel with ChangeNotifier {
       image?.dispose();
       return;
     }
+    if (isMobile && image != null) mobileImageDisplay = display;
     await update(image);
   }
 
@@ -2241,6 +2248,7 @@ class EdgeScrollFallbackState {
 }
 
 class CanvasModel with ChangeNotifier {
+  WindowFocusGeometry? windowFocus;
   // image offset of canvas
   double _x = 0;
   // image offset of canvas
@@ -3314,6 +3322,8 @@ class CursorModel with ChangeNotifier {
   }
 
   Offset? getRemotePosInRect(Offset offset) {
+    final focus = parent.target?.canvasModel.windowFocus;
+    if (focus != null) return focus.localToDesktop(offset);
     final adjust = parent.target?.canvasModel.getAdjustY() ?? 0;
     final newPos = _getNewPos(offset.dx, offset.dy, adjust);
     final visibleRect = getVisibleRect();
@@ -3330,6 +3340,10 @@ class CursorModel with ChangeNotifier {
   }
 
   Offset _getNewPos(double x, double y, double adjust) {
+    final focus = parent.target?.canvasModel.windowFocus;
+    if (focus != null) {
+      return focus.localToDesktop(Offset(x, y), clamp: true) ?? focus.desktopRect.center;
+    }
     final xoffset = parent.target?.canvasModel.x ?? 0;
     final yoffset = parent.target?.canvasModel.y ?? 0;
     final newX = (x - xoffset) / scale + _displayOriginX;
@@ -3364,6 +3378,18 @@ class CursorModel with ChangeNotifier {
   }
 
   updatePan(Offset delta, Offset localPosition, bool touchMode) async {
+    final focus = parent.target?.canvasModel.windowFocus;
+    if (focus != null) {
+      final target = touchMode
+          ? focus.localToDesktop(localPosition, clamp: true)
+          : focus.moveDesktopCursor(offset, delta);
+      if (target == null) return;
+      _x = target.dx;
+      _y = target.dy;
+      await parent.target?.inputModel.moveMouse(_x, _y);
+      notifyListeners();
+      return;
+    }
     if (touchMode) {
       await _handleTouchMode(delta, localPosition);
       return;

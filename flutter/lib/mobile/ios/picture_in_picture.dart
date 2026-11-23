@@ -31,6 +31,7 @@ class IosRemotePictureInPicture {
   bool _attached = false;
   bool _manualStart = false;
   int _display = -1;
+  Rect? _crop;
   int? _backgroundRetries;
   final _interruption = Stopwatch();
   Stopwatch? _foregroundResume;
@@ -61,12 +62,25 @@ class IosRemotePictureInPicture {
           'display': _display,
           'automatic': iosAutomaticPip,
           'quality': iosPipQuality.name,
+          if (_crop case final crop?)
+            'crop': [
+              crop.left.round(),
+              crop.top.round(),
+              crop.width.round(),
+              crop.height.round()
+            ],
         }) ??
         false;
   }
 
   void _displayChanged() {
     if (_display != ffi.ffiModel.pi.currentDisplay) unawaited(_configure());
+  }
+
+  void setCrop(Rect? crop) {
+    if (_crop == crop) return;
+    _crop = crop;
+    if (available) unawaited(_configure());
   }
 
   Future<T?> _call<T>(String method,

@@ -209,7 +209,7 @@ impl Contacts {
     }
 }
 
-fn on_default_input_desktop() -> bool {
+pub(crate) fn on_default_input_desktop() -> bool {
     let mut name = [0u16; 32];
     let mut length = 0;
     unsafe {

@@ -423,6 +423,8 @@ pub struct Connection {
     file_transferred: bool,
     #[cfg(windows)]
     portable: PortableState,
+    #[cfg(windows)]
+    remote_windows: crate::platform::windows_focus::WindowSnapshots,
     from_switch: bool,
     voice_call_request_timestamp: Option<NonZeroI64>,
     voice_calling: bool,
@@ -1994,6 +1996,7 @@ impl Connection {
         #[cfg(target_os = "windows")]
         {
             crate::platform::windows_touch::advertise(&mut platform_additions);
+            platform_additions.insert("remote_window_focus".into(), json!(true));
             platform_additions.insert(
                 "is_installed".into(),
                 json!(crate::platform::is_installed()),
@@ -4099,6 +4102,10 @@ impl Connection {
                             }
                         }
                     }
+                    #[cfg(windows)]
+                    Some(misc::Union::RequestRemoteWindows(true)) => {
+                        self.send_remote_windows().await;
+                    }
                     _ => {}
                 },
                 Some(message::Union::AudioFrame(frame)) => {
@@ -5318,6 +5325,23 @@ impl Connection {
                 "Not supported".to_string(),
                 impl_key,
             ),
+        }
+    }
+
+    #[cfg(windows)]
+    async fn send_remote_windows(&mut self) {
+        if !self.is_remote() || !self.peer_keyboard_enabled() || !self.remote_windows.accept_request() {
+            return;
+        }
+        match tokio::task::spawn_blocking(crate::platform::windows_focus::snapshot).await {
+            Ok(snapshot) => {
+                let mut misc = Misc::new();
+                misc.set_remote_windows(snapshot);
+                let mut message = Message::new();
+                message.set_misc(misc);
+                self.send(message).await;
+            }
+            Err(error) => log::warn!("Window enumeration task failed: {error}"),
         }
     }
 

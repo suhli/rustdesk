@@ -9,6 +9,7 @@ final class RemotePictureInPictureFrames {
 
     private let lock = NSLock()
     private var display: Int?
+    private var crop: CGRect?
     private var generation = 0
     private var longestEdge = 0
     private var interval: TimeInterval = 0
@@ -16,14 +17,15 @@ final class RemotePictureInPictureFrames {
     private var pending = false
     private var deliver: ((CVPixelBuffer, CMTime) -> Void)?
 
-    func configure(display: Int?, longestEdge: Int, fps: Double,
+    func configure(display: Int?, crop: CGRect?, longestEdge: Int, fps: Double,
                    deliver: ((CVPixelBuffer, CMTime) -> Void)?) {
         lock.lock()
-        if self.display != display || self.longestEdge != longestEdge {
+        if self.display != display || self.longestEdge != longestEdge || self.crop != crop {
             generation += 1
             lastFrame = 0
         }
         self.display = display
+        self.crop = crop
         self.longestEdge = longestEdge
         interval = 1 / fps
         self.deliver = deliver
@@ -39,15 +41,23 @@ final class RemotePictureInPictureFrames {
         }
         let generation = self.generation
         let longestEdge = self.longestEdge
+        let crop = self.crop
         lastFrame = now
         pending = true
         lock.unlock()
 
         // The decoder reuses its storage as soon as this call returns.
-        let scale = min(1, Double(longestEdge) / Double(max(width, height)))
-        let buffer = Self.resize(bytes, width, height, stride,
-                                 max(1, Int(Double(width) * scale)), max(1, Int(Double(height) * scale)))
-        DispatchQueue.main.async { [self] in
+        let frame = CGRect(x: 0, y: 0, width: width, height: height)
+        let source = crop.map { frame.intersection($0) } ?? frame
+        var buffer: CVPixelBuffer?
+        if !source.isEmpty && !source.isNull {
+            let w = Int(source.width), h = Int(source.height)
+            let pixels = bytes.advanced(by: Int(source.minY) * stride + Int(source.minX) * 4)
+            let scale = min(1, Double(longestEdge) / Double(max(w, h)))
+            buffer = Self.resize(pixels, w, h, stride,
+                                 max(1, Int(Double(w) * scale)), max(1, Int(Double(h) * scale)))
+        }
+        DispatchQueue.main.async { [self, buffer] in
             lock.lock()
             let deliver = generation == self.generation ? self.deliver : nil
             pending = false

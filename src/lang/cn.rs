@@ -929,5 +929,11 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Tailscale status is temporarily unavailable", "暂时无法获取 Tailscale 状态"),
         ("Windows native touch", "Windows 原生触控"),
         ("Exit Windows native touch", "退出 Windows 原生触控"),
+        ("Focus a remote window", "专注远程窗口"),
+        ("No visible remote windows", "没有可见的远程窗口"),
+        ("Window scaling", "窗口缩放"),
+        ("Exit window focus", "退出窗口专注"),
+        ("Contain", "完整显示"),
+        ("Cover", "等比铺满"),
     ].iter().cloned().collect();
 }

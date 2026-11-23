@@ -1184,6 +1184,15 @@ impl<T: InvokeUiSession> Session<T> {
         send_pointer_device_event(event, false, false, false, false, self);
     }
 
+    #[cfg(all(feature = "flutter", any(target_os = "android", target_os = "ios")))]
+    pub(crate) fn request_remote_windows(&self) {
+        let mut misc = Misc::new();
+        misc.set_request_remote_windows(true);
+        let mut message = Message::new();
+        message.set_misc(misc);
+        self.send(Data::Message(message));
+    }
+
     pub fn send_touch_pan_event(
         &self,
         event: &str,
@@ -1717,6 +1726,8 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn set_peer_info(&self, peer_info: &PeerInfo); // flutter
     fn set_displays(&self, displays: &Vec<DisplayInfo>);
     fn set_platform_additions(&self, data: &str);
+    #[cfg(all(feature = "flutter", any(target_os = "android", target_os = "ios")))]
+    fn remote_windows(&self, _snapshot: RemoteWindowSnapshot) {}
     fn on_connected(&self, conn_type: ConnType);
     fn update_privacy_mode(&self);
     fn set_permission(&self, name: &str, value: bool);

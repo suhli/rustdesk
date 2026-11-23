@@ -20,6 +20,7 @@ final class RemotePictureInPicture: NSObject, AVPictureInPictureControllerDelega
     private var suspended: NSKeyValueObservation?
     private var owner: String?
     private var display = 0
+    private var crop: CGRect?
     private var automatic = false
     private var quality = "automatic"
     private var foreground = true
@@ -81,8 +82,17 @@ final class RemotePictureInPicture: NSObject, AVPictureInPictureControllerDelega
                     }
                 }
             }
-            if self.display != display { source.videoLayer?.flushAndRemoveImage() }
+            let values = args["crop"] as? [Int]
+            let crop = values.flatMap { values -> CGRect? in
+                guard values.count == 4, values[0] >= 0, values[1] >= 0,
+                      values[2] > 0, values[3] > 0 else { return nil }
+                return CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
+            }
+            if self.display != display || (self.crop == nil) != (crop == nil) {
+                source.videoLayer?.flushAndRemoveImage()
+            }
             self.display = display
+            self.crop = crop
             automatic = args["automatic"] as? Bool ?? true
             quality = args["quality"] as? String ?? "automatic"
             updateSource()
@@ -182,6 +192,7 @@ final class RemotePictureInPicture: NSObject, AVPictureInPictureControllerDelega
         let flowing = enabled && playbackAudio && live && !paused
         RemotePictureInPictureFrames.shared.configure(
             display: flowing ? display : nil,
+            crop: crop,
             longestEdge: active ? (saving ? 640 : quality == "high" ? 1280 : 960) : 640,
             fps: active ? (saving ? 8 : quality == "high" ? 24 : 15) : 6
         ) { [weak self] buffer, pts in
@@ -249,6 +260,7 @@ final class RemotePictureInPicture: NSObject, AVPictureInPictureControllerDelega
             if controller.isPictureInPictureActive { controller.stopPictureInPicture() }
         }
         controller = nil
+        crop = nil
         starting = false
         restoringUI = false
         dismissed = false

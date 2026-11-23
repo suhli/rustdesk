@@ -845,6 +845,20 @@ message MessageQuery {
   int32 switch_display = 1;
 }
 
+message RemoteAppWindow {
+  string id = 1;
+  string app = 2;
+  string title = 3;
+  sint32 x = 4;
+  sint32 y = 5;
+  uint32 width = 6;
+  uint32 height = 7;
+}
+
+message RemoteWindowSnapshot {
+  repeated RemoteAppWindow windows = 1;
+}
+
 message Misc {
   oneof union {
     ChatMessage chat_message = 4;
@@ -888,6 +902,8 @@ message Misc {
     // is rebuilt, and held again, the next time it is shown, before any connection names it
     // by id again, so the shape just selected is always there to give.
     uint64 request_cursor_data = 39;
+    bool request_remote_windows = 40;
+    RemoteWindowSnapshot remote_windows = 41;
   }
 }
 
