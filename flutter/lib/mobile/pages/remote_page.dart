@@ -941,10 +941,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       menus.add(TTextMenu(child: Text(translate('Local video enhancement')),
           onPressed: _chooseVideoQuality));
     }
-    if (_windowFocus.supported) {
+    if (!isWeb && (isIOS || isAndroid) && gFFI.ffiModel.isPeerWindows) {
       menus.add(TTextMenu(child: Text(translate('Focus a remote window')),
           onPressed: () => _windowFocus.pick(context)));
-      if (_windowFocus.selected != null) {
+      if (_windowFocus.supported && _windowFocus.selected != null) {
         menus.add(TTextMenu(child: Text(translate('Window scaling')),
             onPressed: _chooseWindowFit));
         menus.add(TTextMenu(child: Text(translate('Exit window focus')),

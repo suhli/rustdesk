@@ -57,15 +57,34 @@ class RemoteWindowFocus extends ChangeNotifier {
   Timer? _poll;
   Rect? _crop;
 
-  bool get supported =>
-      !isWeb &&
-      (isIOS || isAndroid) &&
-      ffi.ffiModel.isPeerWindows &&
-      ffi.ffiModel.keyboard &&
+  bool get _peerSupportsWindowFocus =>
       ffi.ffiModel.pi.platformAdditions['remote_window_focus'] == true;
 
+  bool get supported =>
+      ffi.ffiModel.isPeerWindows &&
+      ffi.ffiModel.keyboard &&
+      _peerSupportsWindowFocus;
+
   Future<void> pick(BuildContext context) async {
-    if (!supported || _disposed || _picking) return;
+    if (_disposed || _picking || !ffi.ffiModel.isPeerWindows) return;
+    if (!supported) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(translate('Focus a remote window')),
+          content: Text(translate(_peerSupportsWindowFocus
+              ? 'window_focus_keyboard_permission_tip'
+              : 'window_focus_peer_upgrade_tip')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(translate('OK')),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     fit = WindowFocusFit.values.firstWhere(
       (fit) => fit.name == bind.getLocalFlutterOption(k: _fitOption),
       orElse: () => WindowFocusFit.contain,

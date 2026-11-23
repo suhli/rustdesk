@@ -292,5 +292,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("api_server_empty_tip", "With API Server empty, your custom server defaults to HTTP. Contact your administrator to enable HTTPS."),
         ("android-logs-folder-tip", "Choose Android → media to store log files."),
         ("install-directory-not-empty-tip", "The selected folder is not empty. Installation may delete existing data. Consider choosing a different folder."),
+        ("window_focus_peer_upgrade_tip", "Run a RustDesk build with window focus on the remote Windows PC, then reconnect."),
+        ("window_focus_keyboard_permission_tip", "Ask the remote Windows user to allow keyboard and mouse control for this session."),
     ].iter().cloned().collect();
 }

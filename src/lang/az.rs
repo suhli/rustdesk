@@ -938,5 +938,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Local video enhancement", ""),
         ("GPU enhancement", ""),
         ("AI super-resolution", ""),
+        ("window_focus_peer_upgrade_tip", ""),
+        ("window_focus_keyboard_permission_tip", ""),
     ].iter().cloned().collect();
 }

@@ -938,5 +938,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Local video enhancement", "本地画质增强"),
         ("GPU enhancement", "普通增强"),
         ("AI super-resolution", "AI 超分"),
+        ("window_focus_peer_upgrade_tip", "请在被控 Windows 电脑上运行支持窗口专注的 RustDesk 版本，然后重新连接。"),
+        ("window_focus_keyboard_permission_tip", "请让 Windows 被控端为当前会话授予键鼠控制权限。"),
     ].iter().cloned().collect();
 }
