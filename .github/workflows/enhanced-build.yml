@@ -1,0 +1,66 @@
+name: Enhanced Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_ios:
+        description: Build iOS IPA
+        type: boolean
+        default: false
+      build_windows:
+        description: Build Windows x64
+        type: boolean
+        default: false
+      bundle_id:
+        description: 'iOS only: enter your app Bundle ID (must match the profile for signing)'
+        type: string
+      signing:
+        description: 'iOS only: unsigned IPA for LiveContainer or re-signing; other modes use Apple signing secrets'
+        type: choice
+        options: [unsigned, development, ad-hoc, app-store]
+        default: unsigned
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate build inputs
+    runs-on: ubuntu-22.04
+    env:
+      BUILD_IOS: ${{ inputs.build_ios }}
+      BUILD_WINDOWS: ${{ inputs.build_windows }}
+      IOS_BUNDLE_ID: ${{ inputs.bundle_id }}
+    steps:
+      - shell: bash
+        run: |
+          if [[ "$BUILD_IOS" != 'true' && "$BUILD_WINDOWS" != 'true' ]]; then
+            echo '::error::Select at least one platform to build.'
+            exit 1
+          fi
+          if [[ "$BUILD_IOS" == 'true' && -z "${IOS_BUNDLE_ID//[[:space:]]/}" ]]; then
+            echo '::error::Enter an iOS Bundle ID when building iOS.'
+            exit 1
+          fi
+  bridge:
+    needs: validate
+    uses: ./.github/workflows/bridge.yml
+  ios:
+    if: inputs.build_ios
+    needs: bridge
+    uses: ./.github/workflows/ios-enhanced.yml
+    with:
+      reuse_bridge: true
+      bundle_id: ${{ inputs.bundle_id }}
+      signing: ${{ inputs.signing }}
+    secrets:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+  windows:
+    if: inputs.build_windows
+    needs: bridge
+    uses: ./.github/workflows/windows-enhanced.yml
+    with:
+      reuse_bridge: true

@@ -1,6 +1,29 @@
 name: iOS Enhanced
 
 on:
+  workflow_call:
+    inputs:
+      reuse_bridge:
+        description: Use the bridge-artifact already built in the caller's run
+        type: boolean
+        default: false
+      bundle_id:
+        type: string
+        required: true
+      signing:
+        type: string
+        required: true
+    secrets:
+      IOS_BUNDLE_ID:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+      IOS_CERTIFICATE_P12_BASE64:
+        required: false
+      IOS_CERTIFICATE_PASSWORD:
+        required: false
+      IOS_PROVISIONING_PROFILE_BASE64:
+        required: false
   workflow_dispatch:
     inputs:
       signing:
@@ -18,14 +41,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: ios-enhanced-${{ github.ref }}
+  group: ios-enhanced-${{ inputs.reuse_bridge && github.run_id || github.ref }}
   cancel-in-progress: true
 
 jobs:
   bridge:
+    if: ${{ !inputs.reuse_bridge }}
     uses: ./.github/workflows/bridge.yml
   ios:
     needs: bridge
+    if: ${{ !cancelled() && (needs.bridge.result == 'success' || (inputs.reuse_bridge && needs.bridge.result == 'skipped')) }}
     runs-on: macos-15
     timeout-minutes: 180
     env:
