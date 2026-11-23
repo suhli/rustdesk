@@ -1,3 +1,4 @@
+import AVKit
 import Flutter
 import Security
 import UIKit
@@ -6,11 +7,15 @@ public final class IosEnhancements: NSObject {
     private static let queue = DispatchQueue(label: "rustdesk.embedded-tailnet")
     private weak var controller: FlutterViewController?
     private var channel: FlutterMethodChannel?
+    private var pictureInPicture: AnyObject?
     private static var tailnetConfiguration: String?
 
     public init(controller: FlutterViewController) {
         self.controller = controller
         super.init()
+        if #available(iOS 15.0, *), AVPictureInPictureController.isPictureInPictureSupported() {
+            pictureInPicture = RemotePictureInPicture(controller)
+        }
         let channel = FlutterMethodChannel(name: "rustdesk/ios-enhancements", binaryMessenger: controller.binaryMessenger)
         self.channel = channel
         channel.setMethodCallHandler { [weak self] call, result in
@@ -25,6 +30,19 @@ public final class IosEnhancements: NSObject {
                     DispatchQueue.main.async { result(FlutterError(code: "tailnet", message: error.localizedDescription, details: nil)) }
                 }
             }
+        }
+    }
+
+    public func sceneForegroundChanged(_ foreground: Bool) {
+        if #available(iOS 15.0, *) {
+            (pictureInPicture as? RemotePictureInPicture)?.setForeground(foreground)
+        }
+    }
+
+    public static func submitPictureInPictureFrame(_ display: Int, _ bytes: UnsafePointer<UInt8>?,
+                                                     _ width: Int, _ height: Int, _ stride: Int) {
+        if #available(iOS 15.0, *), let bytes = bytes {
+            RemotePictureInPictureFrames.shared.submit(display, bytes, width, height, stride)
         }
     }
 

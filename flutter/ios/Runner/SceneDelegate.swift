@@ -3,6 +3,14 @@ import UIKit
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   var window: UIWindow?
 
+  func sceneDidBecomeActive(_ scene: UIScene) {
+    (UIApplication.shared.delegate as? AppDelegate)?.sceneForegroundChanged(true)
+  }
+
+  func sceneDidEnterBackground(_ scene: UIScene) {
+    (UIApplication.shared.delegate as? AppDelegate)?.sceneForegroundChanged(false)
+  }
+
   func scene(
     _ scene: UIScene,
     willConnectTo session: UISceneSession,

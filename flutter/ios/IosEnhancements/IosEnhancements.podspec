@@ -14,6 +14,6 @@ Pod::Spec.new do |s|
   s.platform = :ios, '13.0'
   s.swift_version = '5.0'
   s.static_framework = true
-  s.frameworks = 'Security', 'SystemConfiguration', 'CoreFoundation'
+  s.frameworks = 'Security', 'SystemConfiguration', 'CoreFoundation', 'AVKit', 'AVFoundation', 'Accelerate'
   s.libraries = 'resolv'
 end

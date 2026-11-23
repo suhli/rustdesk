@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../common.dart';
 import '../../models/platform_model.dart';
 import 'orientation.dart';
+import 'picture_in_picture.dart';
 import 'preferences.dart';
 import 'tailnet.dart';
 import 'macros_page.dart';
@@ -155,6 +156,8 @@ class _IosSettingsPageState extends State<IosSettingsPage> {
         return 'Connecting...';
       case 'Failed':
         return 'Connection failed';
+      case 'Unavailable':
+        return tailnet.statusLabel;
       default:
         return 'Disconnected';
     }
@@ -199,6 +202,25 @@ class _IosSettingsPageState extends State<IosSettingsPage> {
                   _switch('Floating session toolbar',
                       IosPreferences.floatingToolbar, (v) => _set('toolbar', v),
                       detail: 'Applies to the next remote session.'),
+                  _switch('Start Picture in Picture automatically',
+                      iosAutomaticPip, (v) => _set('pip-automatic', v)),
+                  ListTile(
+                      title: Text(translate('Picture in Picture quality')),
+                      trailing: DropdownButton<RemotePipQuality>(
+                        value: iosPipQuality,
+                        items: const {
+                          RemotePipQuality.automatic: 'Automatic quality',
+                          RemotePipQuality.economy: 'Energy saving',
+                          RemotePipQuality.high: 'High quality',
+                        }.entries.map((entry) => DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(translate(entry.value)))).toList(),
+                        onChanged: (quality) async {
+                          if (quality == null) return;
+                          await IosPreferences.write('pip-quality', quality.name);
+                          if (mounted) setState(() {});
+                        },
+                      )),
                   ListTile(
                       title: Text(translate('Custom macros')),
                       leading: const Icon(Icons.playlist_play),

@@ -2901,6 +2901,8 @@ impl<T: InvokeUiSession> Remote<T> {
             discard_queue: discard_queue.clone(),
         };
         let handler = self.handler.ui_handler.clone();
+        #[cfg(all(target_os = "ios", feature = "flutter"))]
+        let desktop_video = !self.handler.is_view_camera();
         crate::client::start_video_thread(
             self.handler.clone(),
             display,
@@ -2915,6 +2917,10 @@ impl<T: InvokeUiSession> Remote<T> {
                   pixelbuffer: bool| {
                 *frame_count.write().unwrap() += 1;
                 if pixelbuffer {
+                    #[cfg(all(target_os = "ios", feature = "flutter"))]
+                    if desktop_video {
+                        crate::platform::ios_pip::submit(display, data);
+                    }
                     handler.on_rgba(display, data);
                 } else {
                     #[cfg(all(feature = "vram", feature = "flutter"))]

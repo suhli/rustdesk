@@ -17,7 +17,14 @@ import AVFoundation
       NSLog("Failed to configure audio mixing: %@", error.localizedDescription)
     }
     dummyMethodToEnforceBundling();
+    rd_ios_pip_register_frame_sink { display, bytes, width, height, stride in
+      IosEnhancements.submitPictureInPictureFrame(display, bytes, width, height, stride)
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  func sceneForegroundChanged(_ foreground: Bool) {
+    enhancements?.sceneForegroundChanged(foreground)
   }
 
   // With the UIScene life cycle, the FlutterViewController only exists once the scene

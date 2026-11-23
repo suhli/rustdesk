@@ -10,6 +10,8 @@ pub mod windows;
 
 #[cfg(target_os = "ios")]
 pub mod ios_tailnet;
+#[cfg(all(target_os = "ios", feature = "flutter"))]
+pub(crate) mod ios_pip;
 
 #[cfg(windows)]
 pub mod win_device;

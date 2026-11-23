@@ -52,6 +52,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
       _foreground = true;
   bool _background = false;
   bool _resumePending = false;
+  bool _pictureInPictureClosed = false;
   bool? _forwardersReady;
   Object? _remoteSession;
   Future<void>? _statusRead;
@@ -347,7 +348,16 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void remoteSessionStarted(Object owner) => _remoteSession = owner;
+  void remoteSessionStarted(Object owner) {
+    _remoteSession = owner;
+    _pictureInPictureClosed = false;
+  }
+
+  void remotePictureInPictureClosed(Object owner) {
+    if (!identical(_remoteSession, owner)) return;
+    _pictureInPictureClosed = true;
+    _reconcileLifecycle();
+  }
 
   void remoteSessionEnded(Object owner) {
     if (!identical(_remoteSession, owner)) return;
@@ -356,7 +366,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   bool get _shouldStopInBackground =>
-      _background && _remoteSession == null && state == 'Running';
+      _background && (_remoteSession == null || _pictureInPictureClosed) && state == 'Running';
 
   void _operationFinished() {
     busy = false;
@@ -394,6 +404,7 @@ class EmbeddedTailnet extends ChangeNotifier with WidgetsBindingObserver {
     _foreground = state == AppLifecycleState.resumed;
     if (_foreground) {
       _background = false;
+      _pictureInPictureClosed = false;
       _backgroundTime.stop();
       _resumePending = true;
       _reconcileLifecycle();

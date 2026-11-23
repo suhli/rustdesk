@@ -27,6 +27,7 @@ import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
 import '../ios/preferences.dart';
 import '../ios/orientation.dart';
+import '../ios/picture_in_picture.dart';
 import '../ios/session_toolbar.dart';
 import '../ios/session_macros.dart';
 import '../ios/tailnet.dart';
@@ -102,6 +103,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Timer? _iosKeyboardWorkaroundTimer;
   final bool _iosToolbar = isIOS && IosPreferences.floatingToolbar;
   final _iosMacros = IosSessionMacros();
+  IosRemotePictureInPicture? _iosPip;
 
   final _blockableOverlayState = BlockableOverlayState();
 
@@ -129,7 +131,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    if (isIOS) EmbeddedTailnet.instance.remoteSessionStarted(this);
+    if (isIOS) {
+      EmbeddedTailnet.instance.remoteSessionStarted(this);
+      _iosPip = IosRemotePictureInPicture(gFFI, this);
+    }
     gFFI.ffiModel.updateEventListener(sessionId, widget.id);
     gFFI.start(
       widget.id,
@@ -173,6 +178,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       // side effect of registering callbacks (inside toolbarControls) is
       // what we want here.
       if (mounted) {
+        _iosPip?.attach().then((_) {
+          if (mounted) setState(() {});
+        });
         toolbarControls(context, widget.id, gFFI);
         // Mobile has no DesktopTabController, so tab-switch shortcuts will
         // log a no-handler debug line if a user binds one.
@@ -201,6 +209,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   Future<void> dispose() async {
     _iosMacros.cancel();
+    _iosPip?.dispose();
     if (isIOS) unawaited(iosOrientation.leave());
     HardwareKeyboard.instance.removeHandler(_handleLocalKeyEvent);
     WidgetsBinding.instance.removeObserver(this);
@@ -244,6 +253,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) _iosMacros.cancel();
     if (state == AppLifecycleState.resumed) {
+      _iosPip?.resumed();
       trySyncClipboard();
     }
   }
@@ -741,6 +751,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       more: () => showActions(widget.id),
       macros: () =>
           _iosMacros.show(context, ffi: gFFI, sessionActive: () => mounted),
+      pictureInPicture: _iosPip?.available == true ? _iosPip?.toggle : null,
       help: () => setState(() => _showGestureHelp = !_showGestureHelp),
     );
   }
@@ -879,6 +890,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           child: Text(translate('Custom macros')),
           onPressed: () =>
               _iosMacros.show(context, ffi: gFFI, sessionActive: () => mounted)));
+      if (!_iosToolbar && _iosPip?.available == true) {
+        menus.add(TTextMenu(
+            child: Text(translate('Picture in Picture')),
+            onPressed: _iosPip?.toggle));
+      }
     }
 
     final List<PopupMenuEntry<int>> more = [

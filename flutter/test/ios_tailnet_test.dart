@@ -134,4 +134,21 @@ void main() {
     expect(calls, ['tailnetStatus']);
     expect(tailnet.statusLabel, 'Tailscale status is temporarily unavailable');
   });
+
+  test('closing Picture in Picture in the background stops the idle node',
+      () async {
+    final calls = <String>[];
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(iosChannel,
+        (call) async {
+      calls.add(call.method);
+      return null;
+    });
+    final owner = Object();
+    tailnet.state = 'Running';
+    tailnet.remoteSessionStarted(owner);
+    tailnet.didChangeAppLifecycleState(AppLifecycleState.paused);
+    tailnet.remotePictureInPictureClosed(owner);
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, ['tailnetStop']);
+  });
 }

@@ -135,6 +135,7 @@ class FfiModel with ChangeNotifier {
   bool isRefreshing = false;
 
   Timer? timerScreenshot;
+  bool Function(bool suggestedRetry, String message)? onRemoteTransportError;
 
   Rect? get rect => _rect;
   bool get isOriginalResolutionSet =>
@@ -971,6 +972,9 @@ class FfiModel with ChangeNotifier {
       var hasRetry = evt['hasRetry'] == 'true';
       if (!hasRetry) {
         hasRetry = shouldAutoRetryOnOffline(type, title, text);
+      }
+      if (title == 'Connection Error') {
+        hasRetry = onRemoteTransportError?.call(hasRetry, text) ?? hasRetry;
       }
       showMsgBox(sessionId, type, title, text, link, hasRetry, dialogManager);
     }

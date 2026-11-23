@@ -919,5 +919,13 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Keys: A-Z, 0-9, F1-F12, Enter, Esc, Tab, Space, Backspace, Delete, Insert, Home, End, PageUp, PageDown, Up, Down, Left, Right.", ""),
         ("Enter a delay from 0 to 60000 ms.", ""),
         ("Save macro", ""),
+        ("Picture in Picture", ""),
+        ("Start Picture in Picture automatically", ""),
+        ("Picture in Picture quality", ""),
+        ("Automatic quality", ""),
+        ("Energy saving", ""),
+        ("High quality", ""),
+        ("Picture in Picture is unavailable", ""),
+        ("Tailscale status is temporarily unavailable", ""),
     ].iter().cloned().collect();
 }
