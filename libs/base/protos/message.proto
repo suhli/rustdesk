@@ -853,6 +853,7 @@ message RemoteAppWindow {
   sint32 y = 5;
   uint32 width = 6;
   uint32 height = 7;
+  bool minimized = 8;
 }
 
 message RemoteWindowSnapshot {
@@ -904,6 +905,7 @@ message Misc {
     uint64 request_cursor_data = 39;
     bool request_remote_windows = 40;
     RemoteWindowSnapshot remote_windows = 41;
+    string activate_remote_window = 42;
   }
 }
 

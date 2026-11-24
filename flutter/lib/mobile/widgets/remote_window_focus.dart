@@ -14,16 +14,19 @@ import 'mobile_video_quality.dart';
 const _fitOption = 'mobile-window-focus-fit';
 
 class RemoteAppWindow {
-  const RemoteAppWindow(this.id, this.title, this.app, this.rect);
+  const RemoteAppWindow(this.id, this.title, this.app, this.rect,
+      {this.minimized = false});
 
   final String id, title, app;
   final Rect rect;
+  final bool minimized;
 
   static RemoteAppWindow? parse(Object? value) {
     if (value is! Map) return null;
     final id = value['id'], title = value['title'], app = value['app'];
     final x = value['x'], y = value['y'];
     final width = value['width'], height = value['height'];
+    final minimized = value['minimized'] == true;
     if (id is! String ||
         title is! String ||
         app is! String ||
@@ -31,16 +34,18 @@ class RemoteAppWindow {
         y is! int ||
         width is! int ||
         height is! int ||
-        width <= 0 ||
-        height <= 0) {
+        (!minimized && (width <= 0 || height <= 0))) {
       return null;
     }
     return RemoteAppWindow(
         id,
         title,
         app,
-        Rect.fromLTWH(
-            x.toDouble(), y.toDouble(), width.toDouble(), height.toDouble()));
+        minimized
+            ? Rect.zero
+            : Rect.fromLTWH(x.toDouble(), y.toDouble(), width.toDouble(),
+                height.toDouble()),
+        minimized: minimized);
   }
 }
 
@@ -135,7 +140,10 @@ class RemoteWindowFocus extends ChangeNotifier {
     );
     if (_disposed) return;
     _picking = false;
-    if (chosen != null) _select(chosen);
+    if (chosen != null && supported) {
+      unawaited(_activate(chosen.id));
+      _select(chosen);
+    }
     _updatePolling();
   }
 
@@ -169,6 +177,16 @@ class RemoteWindowFocus extends ChangeNotifier {
     }
   }
 
+  Future<void> _activate(String id) async {
+    try {
+      await bind.sessionSendPointer(
+          sessionId: ffi.sessionId,
+          msg: jsonEncode({'k': 'activate-remote-window', 'v': id}));
+    } catch (error) {
+      debugPrint('Remote window activation request failed: $error');
+    }
+  }
+
   void _receive(String data) {
     try {
       final snapshot = jsonDecode(data);
@@ -186,11 +204,17 @@ class RemoteWindowFocus extends ChangeNotifier {
       final windows = _windows!;
       for (final window in windows) {
         if (window.id != selection.id) continue;
+        if (window.minimized && !selection.minimized) {
+          clear();
+          return;
+        }
         final pi = ffi.ffiModel.pi;
         final display = pi.getDisplayRect(pi.currentDisplay);
-        if (window.rect != selection.rect ||
-            display == null ||
-            window.rect.intersect(display).isEmpty) {
+        if (!window.minimized &&
+            (selection.minimized ||
+                window.rect != selection.rect ||
+                display == null ||
+                window.rect.intersect(display).isEmpty)) {
           _select(window);
         }
         if (_picking) notifyListeners();
@@ -203,6 +227,13 @@ class RemoteWindowFocus extends ChangeNotifier {
   }
 
   void _select(RemoteAppWindow window) {
+    if (window.minimized) {
+      selected = window;
+      ffi.canvasModel.windowFocus = null;
+      _displayChanged();
+      notifyListeners();
+      return;
+    }
     final pi = ffi.ffiModel.pi;
     var index = -1;
     var largest = 0.0;
@@ -289,7 +320,7 @@ class RemoteWindowFocusView extends StatelessWidget {
       animation: Listenable.merge([focus, enhancement]),
       builder: (context, _) {
         final chosen = focus.selected;
-        if (chosen == null) return desktop;
+        if (chosen == null || chosen.minimized) return desktop;
         final imageModel = context.watch<ImageModel>();
         final cursorModel = context.watch<CursorModel>();
         final ffiModel = context.watch<FfiModel>();

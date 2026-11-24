@@ -1193,6 +1193,15 @@ impl<T: InvokeUiSession> Session<T> {
         self.send(Data::Message(message));
     }
 
+    #[cfg(all(feature = "flutter", any(target_os = "android", target_os = "ios")))]
+    pub(crate) fn activate_remote_window(&self, id: String) {
+        let mut misc = Misc::new();
+        misc.set_activate_remote_window(id);
+        let mut message = Message::new();
+        message.set_misc(misc);
+        self.send(Data::Message(message));
+    }
+
     pub fn send_touch_pan_event(
         &self,
         event: &str,

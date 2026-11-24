@@ -964,7 +964,8 @@ impl InvokeUiSession for FlutterHandler {
             .take(100)
             .map(|window| {
                 serde_json::json!({"id": window.id, "app": window.app, "title": window.title,
-                    "x": window.x, "y": window.y, "width": window.width, "height": window.height})
+                    "x": window.x, "y": window.y, "width": window.width, "height": window.height,
+                    "minimized": window.minimized})
             })
             .collect();
         self.push_event(
@@ -1982,6 +1983,15 @@ pub fn session_send_pointer(session_id: SessionID, msg: String) {
                 Some("remote-windows") => {
                     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
                         session.request_remote_windows();
+                    }
+                }
+                #[cfg(any(target_os = "android", target_os = "ios"))]
+                Some("activate-remote-window") => {
+                    if let (Some(id), Some(session)) = (
+                        v.as_str(),
+                        sessions::get_session_by_session_id(&session_id),
+                    ) {
+                        session.activate_remote_window(id.to_owned());
                     }
                 }
                 _ => {}

@@ -4113,6 +4113,10 @@ impl Connection {
                     Some(misc::Union::RequestRemoteWindows(true)) => {
                         self.send_remote_windows().await;
                     }
+                    #[cfg(windows)]
+                    Some(misc::Union::ActivateRemoteWindow(id)) => {
+                        self.activate_remote_window(id).await;
+                    }
                     _ => {}
                 },
                 Some(message::Union::AudioFrame(frame)) => {
@@ -5358,6 +5362,25 @@ impl Connection {
                 warn,
                 "Window enumeration task failed: {error}"
             ),
+        }
+    }
+
+    #[cfg(windows)]
+    async fn activate_remote_window(&mut self, id: String) {
+        if self.is_remote()
+            && self.peer_keyboard_enabled()
+            && self.remote_windows.accept_activation()
+        {
+            if let Err(error) =
+                tokio::task::spawn_blocking(move || crate::platform::windows_focus::activate(&id))
+                    .await
+            {
+                hbb_common::throttled_log!(
+                    std::time::Duration::from_secs(5),
+                    warn,
+                    "Window activation task failed: {error}"
+                );
+            }
         }
     }
 
