@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_hbb/generated_bridge.dart';
+import 'package:flutter_hbb/generated_bridge.dart' show RustdeskImpl;
 import 'package:flutter_hbb/mobile/widgets/remote_window_focus.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
