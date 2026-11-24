@@ -645,7 +645,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget getBottomAppBar() {
     final ffiModel = Provider.of<FfiModel>(context);
-    Widget fitActions(Widget actions) => _showWindowFocusButton
+    Widget fitActions(Widget actions) => _isMobileWindowsSession
         ? Flexible(
             child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal, child: actions))
@@ -674,7 +674,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                         showOptions(context, widget.id, gFFI.dialogManager);
                       },
                     ),
-                    if (_showWindowFocusButton)
+                    if (_isMobileWindowsSession)
                       RemoteWindowFocusButton(
                           focus: _windowFocus, color: Colors.white),
                   ] +
@@ -698,14 +698,22 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                                   color: Colors.white,
                                   icon: Icon(Icons.keyboard),
                                   onPressed: openKeyboard),
-                              IconButton(
-                                color: Colors.white,
-                                icon: Icon(gFFI.ffiModel.touchMode
-                                    ? Icons.touch_app
-                                    : Icons.mouse),
-                                onPressed: () => setState(
-                                    () => _showGestureHelp = !_showGestureHelp),
-                              ),
+                              if (_isMobileWindowsSession)
+                                IconButton(
+                                  color: Colors.white,
+                                  icon: Icon(_pointerMode.icon),
+                                  tooltip: translate(_pointerMode.label),
+                                  onPressed: _cyclePointerMode,
+                                )
+                              else
+                                IconButton(
+                                  color: Colors.white,
+                                  icon: Icon(gFFI.ffiModel.touchMode
+                                      ? Icons.touch_app
+                                      : Icons.mouse),
+                                  onPressed: () => setState(() =>
+                                      _showGestureHelp = !_showGestureHelp),
+                                ),
                             ]) +
                   (isWeb
                       ? []
@@ -753,19 +761,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Widget _buildIosToolbar() {
     final model = Provider.of<FfiModel>(context);
     return IosSessionToolbar(
-      touchMode: model.touchMode,
+      pointerMode: _pointerMode,
       keyboardEnabled: model.keyboard && !model.viewOnly && model.pi.displays.isNotEmpty,
       close: () => clientClose(sessionId, gFFI),
       keyboard: openKeyboard,
-      mouse: () {
-        if (_nativeTouch.value) {
-          _setWindowsTouch(false);
-          return;
-        }
-        model.toggleTouchMode();
-        bind.mainSetLocalOption(key: kOptionTouchMode, value: model.touchMode ? 'Y' : 'N');
-        showToast(translate(model.touchMode ? 'Touch mode' : 'Mouse mode'));
-      },
+      cyclePointerMode: _cyclePointerMode,
       display: () => showOptions(context, widget.id, gFFI.dialogManager),
       rotate: () async {
         final error = await iosOrientation.rotate(MediaQuery.of(context).orientation == Orientation.portrait);
@@ -775,7 +775,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       macros: () =>
           _iosMacros.show(context, ffi: gFFI, sessionActive: () => mounted),
       pictureInPicture: _iosPip?.available == true ? _iosPip?.toggle : null,
-      windowFocus: _showWindowFocusButton ? _windowFocus : null,
+      windowFocus: _isMobileWindowsSession ? _windowFocus : null,
       help: () => setState(() => _showGestureHelp = !_showGestureHelp),
     );
   }
@@ -783,11 +783,40 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Widget _withIosToolbar(Widget child) => _iosToolbar
       ? Stack(children: [child, _buildIosToolbar()]) : child;
 
-  bool get _showWindowFocusButton =>
+  bool get _isMobileWindowsSession =>
       !isWeb && (isIOS || isAndroid) && gFFI.ffiModel.isPeerWindows;
 
   bool get _windowsTouchSupported =>
       !isWeb && (isAndroid || isIOS) && _windowsTouch.supported;
+
+  MobilePointerMode get _pointerMode {
+    if (_windowsTouchSupported && _nativeTouch.value) {
+      return MobilePointerMode.nativeTouch;
+    }
+    return gFFI.ffiModel.touchMode
+        ? MobilePointerMode.touch
+        : MobilePointerMode.mouse;
+  }
+
+  void _cyclePointerMode() {
+    _setPointerMode(
+        _pointerMode.next(supportsNativeTouch: _windowsTouchSupported));
+    showToast(translate(_pointerMode.label));
+  }
+
+  void _setPointerMode(MobilePointerMode mode) {
+    if (mode == MobilePointerMode.nativeTouch) {
+      _setWindowsTouch(true);
+      return;
+    }
+    if (_nativeTouch.value) _setWindowsTouch(false);
+    final model = gFFI.ffiModel;
+    if (model.touchMode != (mode == MobilePointerMode.touch)) {
+      model.toggleTouchMode();
+      bind.mainSetLocalOption(
+          key: kOptionTouchMode, value: model.touchMode ? 'Y' : 'N');
+    }
+  }
 
   void _restoreWindowsTouch() {
     final model = gFFI.ffiModel;
@@ -953,17 +982,18 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       menus.add(TTextMenu(child: Text(translate('Local video enhancement')),
           onPressed: _chooseVideoQuality));
     }
-    if (_showWindowFocusButton && _windowFocus.supported &&
+    if (_isMobileWindowsSession && _windowFocus.supported &&
         _windowFocus.selected != null) {
       menus.add(TTextMenu(child: Text(translate('Window scaling')),
           onPressed: _chooseWindowFit));
     }
-    if (_windowsTouchSupported && gFFI.ffiModel.keyboard && !gFFI.ffiModel.viewOnly) {
+    if (!_iosToolbar &&
+        _isMobileWindowsSession &&
+        gFFI.ffiModel.keyboard &&
+        !gFFI.ffiModel.viewOnly) {
       menus.add(TTextMenu(
-          child: Text(translate(_nativeTouch.value
-              ? 'Exit Windows native touch'
-              : 'Windows native touch')),
-          onPressed: () => _setWindowsTouch(!_nativeTouch.value)));
+          child: Text(translate('Help')),
+          onPressed: () => setState(() => _showGestureHelp = true)));
     }
     if (isIOS) {
       menus.add(TTextMenu(
@@ -1135,6 +1165,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             child: GestureHelp(
               touchMode: gFFI.ffiModel.touchMode,
               onTouchModeChange: (t) {
+                if (_nativeTouch.value) _setWindowsTouch(false);
                 gFFI.ffiModel.toggleTouchMode();
                 final v = gFFI.ffiModel.touchMode ? 'Y' : 'N';
                 bind.mainSetLocalOption(key: kOptionTouchMode, value: v);

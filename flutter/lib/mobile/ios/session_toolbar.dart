@@ -2,18 +2,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../common.dart';
 import '../widgets/remote_window_focus.dart';
+import '../widgets/windows_touch.dart';
 
 /// Floats over the existing canvas without changing input coordinates.
 class IosSessionToolbar extends StatefulWidget {
-  final VoidCallback close, keyboard, mouse, display, rotate, more, help, macros;
+  final VoidCallback close, keyboard, cyclePointerMode;
+  final VoidCallback display, rotate, more, help, macros;
   final VoidCallback? pictureInPicture;
   final RemoteWindowFocus? windowFocus;
-  final bool touchMode, keyboardEnabled;
+  final MobilePointerMode pointerMode;
+  final bool keyboardEnabled;
   const IosSessionToolbar(
       {super.key,
       required this.close,
       required this.keyboard,
-      required this.mouse,
+      required this.cyclePointerMode,
       required this.display,
       required this.rotate,
       required this.more,
@@ -21,7 +24,7 @@ class IosSessionToolbar extends StatefulWidget {
       required this.macros,
       this.pictureInPicture,
       this.windowFocus,
-      required this.touchMode,
+      required this.pointerMode,
       required this.keyboardEnabled});
   @override
   State<IosSessionToolbar> createState() => _IosSessionToolbarState();
@@ -77,9 +80,11 @@ class _IosSessionToolbarState extends State<IosSessionToolbar> {
                           _button(Icons.keyboard, 'Keyboard',
                               widget.keyboardEnabled ? widget.keyboard : null),
                           _button(
-                              widget.touchMode ? Icons.touch_app : Icons.mouse,
-                              widget.touchMode ? 'Touch mode' : 'Mouse mode',
-                              widget.keyboardEnabled ? widget.mouse : null),
+                              widget.pointerMode.icon,
+                              widget.pointerMode.label,
+                              widget.keyboardEnabled
+                                  ? widget.cyclePointerMode
+                                  : null),
                           _button(
                               Icons.desktop_windows, 'Display', widget.display),
                           if (widget.windowFocus case final focus?)

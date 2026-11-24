@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hbb/generated_bridge.dart' show RustdeskImpl;
 import 'package:flutter_hbb/mobile/ios/session_toolbar.dart';
 import 'package:flutter_hbb/mobile/widgets/remote_window_focus.dart';
+import 'package:flutter_hbb/mobile/widgets/windows_touch.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/window_focus_geometry.dart';
@@ -120,11 +121,11 @@ void main() {
         home: Scaffold(
           body: IosSessionToolbar(
             windowFocus: focus,
-            touchMode: false,
+            pointerMode: MobilePointerMode.mouse,
             keyboardEnabled: true,
             close: ignore,
             keyboard: ignore,
-            mouse: ignore,
+            cyclePointerMode: ignore,
             display: ignore,
             rotate: ignore,
             more: ignore,

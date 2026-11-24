@@ -2,13 +2,30 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../../consts.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
 
 const windowsNativeTouchOption = 'windows-native-touch';
+
+enum MobilePointerMode {
+  touch(Icons.touch_app, 'Touch mode'),
+  mouse(Icons.mouse, 'Mouse mode'),
+  nativeTouch(Icons.back_hand_outlined, 'Windows native touch');
+
+  const MobilePointerMode(this.icon, this.label);
+
+  final IconData icon;
+  final String label;
+
+  MobilePointerMode next({required bool supportsNativeTouch}) => switch (this) {
+        touch => mouse,
+        mouse => supportsNativeTouch ? nativeTouch : touch,
+        nativeTouch => touch,
+      };
+}
 
 class WindowsTouchInput {
   WindowsTouchInput(this.ffi);

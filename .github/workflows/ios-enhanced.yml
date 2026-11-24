@@ -114,7 +114,10 @@ jobs:
         working-directory: flutter
         run: |
           flutter pub get
-          flutter test --no-pub test/ios_orientation_test.dart test/ios_tailnet_test.dart test/ios_keyboard_macro_test.dart test/window_focus_geometry_test.dart test/window_focus_unavailable_test.dart test/mobile_super_resolution_test.dart
+          flutter test --no-pub test/ios_orientation_test.dart test/ios_tailnet_test.dart \
+            test/ios_keyboard_macro_test.dart test/window_focus_geometry_test.dart \
+            test/window_focus_unavailable_test.dart test/mobile_super_resolution_test.dart \
+            test/mobile_pointer_mode_test.dart
           flutter analyze --no-pub --no-fatal-infos lib/mobile/ios test/ios_orientation_test.dart test/ios_tailnet_test.dart test/ios_keyboard_macro_test.dart
       - name: Configure independent identity and validate app icons
         run: |
