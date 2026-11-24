@@ -631,6 +631,8 @@ impl Connection {
             file_transferred: false,
             #[cfg(windows)]
             portable: Default::default(),
+            #[cfg(windows)]
+            remote_windows: Default::default(),
             from_switch: false,
             audio_sender: None,
             voice_call_request_timestamp: None,
