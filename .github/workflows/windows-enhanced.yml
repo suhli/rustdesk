@@ -7,7 +7,16 @@ on:
         description: Use the bridge-artifact already built in the caller's run
         type: boolean
         default: false
+      package:
+        type: string
+        default: portable
   workflow_dispatch:
+    inputs:
+      package:
+        description: 'Portable ZIP or setup MSI (unsigned)'
+        type: choice
+        options: [portable, setup]
+        default: portable
 
 permissions:
   contents: read
@@ -119,9 +128,36 @@ jobs:
               throw "Windows bundle is missing $file"
             }
           }
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - name: Upload portable bundle
+        if: inputs.package == 'portable'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: windows-enhanced-x64-unsigned
           path: ${{ env.WINDOWS_BUNDLE }}/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Add MSBuild to PATH
+        if: inputs.package == 'setup'
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce
+      - name: Build Windows installer
+        if: inputs.package == 'setup'
+        working-directory: res/msi
+        run: |
+          $bundle = Join-Path $env:GITHUB_WORKSPACE $env:WINDOWS_BUNDLE
+          python preprocess.py --dist-dir $bundle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          nuget restore msi.sln -NonInteractive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 -p:TargetVersion=Windows10
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installer = Get-ChildItem -Path 'Package/bin/*/Release/en-us/Package.msi' -File | Select-Object -First 1
+          if (-not $installer) { throw 'MSBuild did not produce the x64 MSI' }
+          Copy-Item -LiteralPath $installer.FullName -Destination (Join-Path $env:RUNNER_TEMP 'rustdesk-enhanced-x64-setup.msi')
+      - name: Upload Windows installer
+        if: inputs.package == 'setup'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: windows-enhanced-x64-setup-unsigned
+          path: ${{ runner.temp }}/rustdesk-enhanced-x64-setup.msi
           if-no-files-found: error
           retention-days: 14

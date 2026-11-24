@@ -19,6 +19,11 @@ on:
         type: choice
         options: [unsigned, development, ad-hoc, app-store]
         default: unsigned
+      windows_package:
+        description: 'Windows only: portable ZIP or setup MSI (unsigned)'
+        type: choice
+        options: [portable, setup]
+        default: portable
 
 permissions:
   contents: read
@@ -64,3 +69,4 @@ jobs:
     uses: ./.github/workflows/windows-enhanced.yml
     with:
       reuse_bridge: true
+      package: ${{ inputs.windows_package }}
