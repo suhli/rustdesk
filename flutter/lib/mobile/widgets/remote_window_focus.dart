@@ -302,6 +302,38 @@ class RemoteWindowFocus extends ChangeNotifier {
   }
 }
 
+class RemoteWindowFocusButton extends StatelessWidget {
+  const RemoteWindowFocusButton(
+      {super.key, required this.focus, this.color, this.onInteraction});
+
+  final RemoteWindowFocus focus;
+  final Color? color;
+  final VoidCallback? onInteraction;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: focus,
+        builder: (context, _) {
+          final active = focus.selected != null;
+          return IconButton(
+            color: color,
+            icon: Icon(
+                active ? Icons.center_focus_strong : Icons.center_focus_weak),
+            tooltip: translate(
+                active ? 'Exit window focus' : 'Focus a remote window'),
+            onPressed: () {
+              onInteraction?.call();
+              if (active) {
+                focus.clear();
+              } else {
+                unawaited(focus.pick(context));
+              }
+            },
+          );
+        },
+      );
+}
+
 class RemoteWindowFocusView extends StatelessWidget {
   const RemoteWindowFocusView(
       {super.key,

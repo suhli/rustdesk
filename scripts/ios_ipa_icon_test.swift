@@ -65,7 +65,8 @@ for path in CommandLine.arguments.dropFirst() {
                       color.alphaComponent >= 0.999 else {
                     fatalError("Unreadable or transparent packaged icon: \(file.lastPathComponent)")
                 }
-                let brightness = max(color.redComponent, max(color.greenComponent, color.blueComponent))
+                let brightness = 0.2126 * color.redComponent
+                    + 0.7152 * color.greenComponent + 0.0722 * color.blueComponent
                 darkest = min(darkest, brightness)
                 brightest = max(brightest, brightness)
             }

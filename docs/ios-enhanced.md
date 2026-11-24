@@ -98,9 +98,9 @@ Flutter 先设置允许的方向，Swift 再从当前 Flutter 控制器所在的
 
 Profile 必须与签名模式、证书及目标设备相符。Development/Ad Hoc 安装要求设备已包含在 profile 中。首次使用建议运行 unsigned；通过后再配置签名。工作流没有自动发布 release 或上传账号私密配置。
 
-`scripts/ios_identity.py` 和 `scripts/ios_icon.swift` 在 CI 构建目录中设置独立 Bundle ID、RustDesk Enhanced 名称和原创几何图标。本地发布前也要运行它们；源仓库原始 iOS 资源保留，以减少上游合并冲突。脚本拒绝使用官方 `com.carriez.*` Bundle ID。
+`scripts/ios_identity.py` 在 CI 构建目录中设置独立 Bundle ID 和 RustDesk Enhanced 名称。本地发布前也要运行该脚本。iOS 构建使用仓库原有的 RustDesk AppIcon。脚本拒绝使用官方 `com.carriez.*` Bundle ID。
 
-图标有两道检查：`ios_icon_test.swift` 校验生成的源图；上传 IPA 前，`ios_ipa_icon_test.swift` 从实际包中读取 iPhone/iPad 主图标声明，检查对应 PNG 存在、不透明且有可见图案。Xcode 优化后的 CgBI PNG 先用 SDK 的 `pngcrush -revert-iphone-optimizations` 解码，不能把普通图片查看器打不开它当作文件损坏。检查只操作临时副本，不重打包或修改签名。
+`ios_icon_test.swift` 校验仓库中的 AppIcon。上传 IPA 前，`ios_ipa_icon_test.swift` 从包内读取 iPhone/iPad 主图标声明，检查对应 PNG 存在、不透明且有可见图案。检查在临时目录用 SDK 的 `pngcrush -revert-iphone-optimizations` 解码 Xcode 优化后的 CgBI PNG。
 
 若 LiveContainer 中仍显示旧黑图，先核对实际导入的构建编号（`CFBundleVersion`）；列表中的 `1.5.0` 只是版本号，无法区分新旧构建。本次实际检查的 build 5 包内图标为纯黑，build 7 的 iPhone/iPad 图标均有正常图案。应先用正确 IPA 覆盖更新现有应用并彻底退出、重开 LiveContainer。部分版本会在应用包目录缓存 `LCAppIconLight.png` / `LCAppIconDark.png`；若已确认包内图标正常且这两个文件存在，可只移除这两个缓存后重开。不要删除应用数据容器或修改 Bundle ID，以免影响现有设置和节点身份。缓存实现参考 [LiveContainer LCAppInfo](https://github.com/LiveContainer/LiveContainer/blob/main/LiveContainerSwiftUI/Models/LCAppInfo.m)。
 
@@ -113,7 +113,7 @@ bash libs/ios_tailnet/build-ios.sh
 cargo rustc --locked --features flutter,hwcodec --release --target aarch64-apple-ios --lib --crate-type staticlib
 export IOS_BUNDLE_ID=org.example.rustdesk.enhanced
 python3 scripts/ios_identity.py
-swift scripts/ios_icon.swift
+swift scripts/ios_icon_test.swift
 cd flutter
 flutter pub get
 flutter test --no-pub test/ios_orientation_test.dart test/ios_tailnet_test.dart
@@ -205,7 +205,7 @@ iOS 和 Android 会话的“更多”菜单仅在 Windows 被控端报告触控�
 
 ### 远程窗口专注
 
-连接 Windows 后，在“更多”中点“专注远程窗口”。入口会提示被控端版本和键鼠权限要求。条件满足后选择一个可见窗口，然后在“窗口缩放”中选择完整显示、铺满或拉伸。模式使用现有桌面帧在手机本地裁剪。触控、鼠标、滚轮和光标共用相同的桌面像素变换。iOS 画中画从同一显示器帧裁剪当前窗口区域。
+连接 Windows 后，点击快捷栏中显示按钮旁的专注图标来选择窗口。专注时图标切换，再点同一位置即可退出。入口会提示被控端版本和键鼠权限要求。“更多”中的“窗口缩放”可选择完整显示、铺满或拉伸。模式使用现有桌面帧在手机本地裁剪。触控、鼠标、滚轮和光标共用相同的桌面像素变换。iOS 画中画从同一显示器帧裁剪当前窗口区域。
 
 选中窗口时，被控端会恢复已最小化的窗口，并请求 Windows 将它切到前台。控制端每秒更新一次窗口位置，恢复后按实际位置裁切。窗口完整移到另一显示器时，选中该显示器的现有视频流。跨屏时，显示当前与窗口相交面积最大的显示器部分。被其他窗口遮挡的区域依旧显示桌面流中的遮挡内容。专注中的窗口最小化、关闭或完全离开可用显示器时回到桌面画面。建议验收时使用窗口边缘和控件角点检查正负坐标、不同 DPI、横竖屏、三个缩放模式，以及画中画中的裁剪。
 

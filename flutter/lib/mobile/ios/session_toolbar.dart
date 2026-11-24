@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../common.dart';
+import '../widgets/remote_window_focus.dart';
 
 /// Floats over the existing canvas without changing input coordinates.
 class IosSessionToolbar extends StatefulWidget {
   final VoidCallback close, keyboard, mouse, display, rotate, more, help, macros;
   final VoidCallback? pictureInPicture;
+  final RemoteWindowFocus? windowFocus;
   final bool touchMode, keyboardEnabled;
   const IosSessionToolbar(
       {super.key,
@@ -18,6 +20,7 @@ class IosSessionToolbar extends StatefulWidget {
       required this.help,
       required this.macros,
       this.pictureInPicture,
+      this.windowFocus,
       required this.touchMode,
       required this.keyboardEnabled});
   @override
@@ -79,6 +82,9 @@ class _IosSessionToolbarState extends State<IosSessionToolbar> {
                               widget.keyboardEnabled ? widget.mouse : null),
                           _button(
                               Icons.desktop_windows, 'Display', widget.display),
+                          if (widget.windowFocus case final focus?)
+                            RemoteWindowFocusButton(
+                                focus: focus, onInteraction: _arm),
                           if (widget.pictureInPicture != null)
                             _button(Icons.picture_in_picture_alt,
                                 'Picture in picture', widget.pictureInPicture),

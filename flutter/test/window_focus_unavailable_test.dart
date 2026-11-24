@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/generated_bridge.dart' show RustdeskImpl;
+import 'package:flutter_hbb/mobile/ios/session_toolbar.dart';
 import 'package:flutter_hbb/mobile/widgets/remote_window_focus.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
@@ -103,8 +104,8 @@ void main() {
 
   for (final minimized in [false, true]) {
     testWidgets(
-        'selecting a ${minimized ? 'minimized' : 'visible'} window '
-        'asks the peer to activate it once', (tester) async {
+        'iOS toolbar focuses a ${minimized ? 'minimized' : 'visible'} window '
+        'and exits focus from the same button', (tester) async {
       final peer = _Peer(supportsFocus: true, keyboard: true);
       peer.pi.displays.add(Display()
         ..width = 800
@@ -114,15 +115,28 @@ void main() {
         crop = rect;
       });
       addTearDown(focus.dispose);
+      void ignore() {}
       await tester.pumpWidget(MaterialApp(
-        home: Builder(
-          builder: (context) => TextButton(
-            onPressed: () => focus.pick(context),
-            child: const Text('Open window picker'),
+        home: Scaffold(
+          body: IosSessionToolbar(
+            windowFocus: focus,
+            touchMode: false,
+            keyboardEnabled: true,
+            close: ignore,
+            keyboard: ignore,
+            mouse: ignore,
+            display: ignore,
+            rotate: ignore,
+            more: ignore,
+            help: ignore,
+            macros: ignore,
           ),
         ),
       ));
-      await tester.tap(find.text('Open window picker'));
+      final start = find.byTooltip('Focus a remote window');
+      expect(find.byIcon(Icons.center_focus_weak), findsOneWidget);
+      final position = tester.getCenter(start);
+      await tester.tap(start);
       await tester.pump();
 
       void snapshot({required bool minimized, int x = 20}) {
@@ -151,7 +165,16 @@ void main() {
       snapshot(minimized: false, x: 40);
       expect(crop, const Rect.fromLTWH(40, 30, 300, 200));
       expect(binding.activations, ['100:200']);
-      focus.clear();
+      final stop = find.byTooltip('Exit window focus');
+      expect(find.byIcon(Icons.center_focus_strong), findsOneWidget);
+      expect(tester.getCenter(stop), position);
+      await tester.tap(stop);
+      await tester.pump();
+      expect(crop, isNull);
+      expect(start, findsOneWidget);
+      expect(find.byIcon(Icons.center_focus_weak), findsOneWidget);
+      expect(binding.activations, ['100:200']);
+      await tester.pumpWidget(const SizedBox.shrink());
     });
   }
 }

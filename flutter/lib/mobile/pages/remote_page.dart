@@ -645,6 +645,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget getBottomAppBar() {
     final ffiModel = Provider.of<FfiModel>(context);
+    Widget fitActions(Widget actions) => _showWindowFocusButton
+        ? Flexible(
+            child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal, child: actions))
+        : actions;
     return BottomAppBar(
       elevation: 10,
       color: MyTheme.accent,
@@ -652,7 +657,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         mainAxisSize: MainAxisSize.max,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
-          Row(
+          fitActions(Row(
               children: <Widget>[
                     IconButton(
                       color: Colors.white,
@@ -668,7 +673,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                         setState(() => _showEdit = false);
                         showOptions(context, widget.id, gFFI.dialogManager);
                       },
-                    )
+                    ),
+                    if (_showWindowFocusButton)
+                      RemoteWindowFocusButton(
+                          focus: _windowFocus, color: Colors.white),
                   ] +
                   (isWebDesktop || ffiModel.viewOnly || !ffiModel.keyboard
                       ? []
@@ -727,7 +735,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                         showActions(widget.id);
                       },
                     ),
-                  ]),
+                  ])),
           Obx(() => IconButton(
                 color: Colors.white,
                 icon: Icon(Icons.expand_more),
@@ -767,12 +775,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       macros: () =>
           _iosMacros.show(context, ffi: gFFI, sessionActive: () => mounted),
       pictureInPicture: _iosPip?.available == true ? _iosPip?.toggle : null,
+      windowFocus: _showWindowFocusButton ? _windowFocus : null,
       help: () => setState(() => _showGestureHelp = !_showGestureHelp),
     );
   }
 
   Widget _withIosToolbar(Widget child) => _iosToolbar
       ? Stack(children: [child, _buildIosToolbar()]) : child;
+
+  bool get _showWindowFocusButton =>
+      !isWeb && (isIOS || isAndroid) && gFFI.ffiModel.isPeerWindows;
 
   bool get _windowsTouchSupported =>
       !isWeb && (isAndroid || isIOS) && _windowsTouch.supported;
@@ -941,15 +953,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       menus.add(TTextMenu(child: Text(translate('Local video enhancement')),
           onPressed: _chooseVideoQuality));
     }
-    if (!isWeb && (isIOS || isAndroid) && gFFI.ffiModel.isPeerWindows) {
-      menus.add(TTextMenu(child: Text(translate('Focus a remote window')),
-          onPressed: () => _windowFocus.pick(context)));
-      if (_windowFocus.supported && _windowFocus.selected != null) {
-        menus.add(TTextMenu(child: Text(translate('Window scaling')),
-            onPressed: _chooseWindowFit));
-        menus.add(TTextMenu(child: Text(translate('Exit window focus')),
-            onPressed: _windowFocus.clear));
-      }
+    if (_showWindowFocusButton && _windowFocus.supported &&
+        _windowFocus.selected != null) {
+      menus.add(TTextMenu(child: Text(translate('Window scaling')),
+          onPressed: _chooseWindowFit));
     }
     if (_windowsTouchSupported && gFFI.ffiModel.keyboard && !gFFI.ffiModel.viewOnly) {
       menus.add(TTextMenu(
