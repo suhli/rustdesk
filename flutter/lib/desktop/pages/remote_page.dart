@@ -136,6 +136,7 @@ class _RemotePageState extends State<RemotePage>
   late FFI _ffi;
   MobileVideoQuality? _videoQuality;
   RemoteWindowFocus? _windowFocus;
+  StreamSubscription<DesktopTabState>? _windowFocusTabSubscription;
   Worker? _waylandKeyboardModeWorker;
   bool _waylandKeyboardModeNormalized = false;
   bool _waylandKeyboardModeNormalizing = false;
@@ -144,6 +145,14 @@ class _RemotePageState extends State<RemotePage>
 
   _RemotePageState(String id) {
     _initStates(id);
+  }
+
+  void _syncWindowFocusTabBar() {
+    if (!mounted) return;
+    final focus = _windowFocus;
+    if (focus == null || !_isSelectedTab) return;
+    final selected = focus.selected;
+    stateGlobal.setWindowFocusHideTabBar(selected != null && !selected.minimized);
   }
 
   void _initStates(String id) {
@@ -159,6 +168,11 @@ class _RemotePageState extends State<RemotePage>
     _ffi = FFI(widget.sessionId);
     _videoQuality = createDesktopVideoQuality();
     _windowFocus = createDesktopWindowFocus(_ffi);
+    if (_windowFocus != null) {
+      _windowFocus!.addListener(_syncWindowFocusTabBar);
+      _windowFocusTabSubscription =
+          widget.tabController?.state.listen((_) => _syncWindowFocusTabBar());
+    }
     if (isMacOS) {
       // SchedulerBinding.instance.lifecycleState is null in the first connection in a new window.
       _macOSLifecycleState = SchedulerBinding.instance.lifecycleState;
@@ -684,6 +698,11 @@ class _RemotePageState extends State<RemotePage>
 
     _pointerLockCenterDebounceTimer?.cancel();
     _pointerLockCenterDebounceTimer = null;
+    _windowFocusTabSubscription?.cancel();
+    _windowFocus?.removeListener(_syncWindowFocusTabBar);
+    if (_windowFocus?.selected != null) {
+      stateGlobal.setWindowFocusHideTabBar(false);
+    }
     _windowFocus?.dispose();
     _videoQuality?.dispose();
     _waylandKeyboardModeWorker?.dispose();

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/remote_window_focus.dart';
 import 'package:flutter_hbb/generated_bridge.dart' show RustdeskImpl;
 import 'package:flutter_hbb/mobile/widgets/mobile_video_quality.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_hbb/mobile/widgets/remote_window_focus.dart';
 import 'package:flutter_hbb/models/desktop_render_texture.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:flutter_hbb/models/state_model.dart';
 import 'package:flutter_hbb/models/window_focus_geometry.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -287,5 +289,32 @@ void main() {
     await tester.pump();
     expect(find.text('desktop-fallback'), findsOneWidget);
     expect(session.canvasModel.windowFocus, isNull);
+  });
+
+  test('window focus hides and restores desktop tab bar height independently',
+      () {
+    final state = stateGlobal;
+    addTearDown(() {
+      state.setWindowFocusHideTabBar(false);
+      state.setFullscreen(false, procWnd: false);
+    });
+    expect(state.showTabBar.value, isTrue);
+    expect(state.tabBarHeight, kDesktopRemoteTabBarHeight);
+
+    state.setWindowFocusHideTabBar(true);
+    expect(state.showTabBar.value, isFalse);
+    expect(state.tabBarHeight, 0);
+
+    state.setFullscreen(true, procWnd: false);
+    expect(state.showTabBar.value, isFalse);
+    expect(state.tabBarHeight, 0);
+
+    state.setFullscreen(false, procWnd: false);
+    expect(state.showTabBar.value, isFalse);
+    expect(state.tabBarHeight, 0);
+
+    state.setWindowFocusHideTabBar(false);
+    expect(state.showTabBar.value, isTrue);
+    expect(state.tabBarHeight, kDesktopRemoteTabBarHeight);
   });
 }

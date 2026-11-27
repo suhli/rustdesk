@@ -13,6 +13,7 @@ class StateGlobal {
   bool _isMinimized = false;
   final RxBool isMaximized = false.obs;
   final RxBool _showTabBar = true.obs;
+  final RxBool _windowFocusHideTabBar = false.obs;
   final RxDouble _resizeEdgeSize = RxDouble(windowResizeEdgeSize);
   final RxDouble _windowBorderWidth = RxDouble(kWindowBorderWidth);
   final RxBool showRemoteToolBar = false.obs;
@@ -40,8 +41,10 @@ class StateGlobal {
   int get windowId => _windowId;
   RxBool get fullscreen => _fullscreen;
   bool get isMinimized => _isMinimized;
-  double get tabBarHeight => fullscreen.isTrue ? 0 : kDesktopRemoteTabBarHeight;
+  double get tabBarHeight =>
+      _showTabBar.isFalse ? 0 : kDesktopRemoteTabBarHeight;
   RxBool get showTabBar => _showTabBar;
+  RxBool get windowFocusHideTabBar => _windowFocusHideTabBar;
   RxDouble get resizeEdgeSize => _resizeEdgeSize;
   RxDouble get windowBorderWidth => _windowBorderWidth;
 
@@ -76,10 +79,21 @@ class StateGlobal {
 
   setMinimized(bool v) => _isMinimized = v;
 
+  void _syncShowTabBar() {
+    _showTabBar.value = !_fullscreen.value && !_windowFocusHideTabBar.value;
+  }
+
+  void setWindowFocusHideTabBar(bool v) {
+    if (_windowFocusHideTabBar.value != v) {
+      _windowFocusHideTabBar.value = v;
+      _syncShowTabBar();
+    }
+  }
+
   setFullscreen(bool v, {bool procWnd = true}) {
     if (_fullscreen.value != v) {
       _fullscreen.value = v;
-      _showTabBar.value = !_fullscreen.value;
+      _syncShowTabBar();
       if (isWebDesktop) {
         procFullscreenWeb();
       } else {
