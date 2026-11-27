@@ -138,6 +138,7 @@ class _RemotePageState extends State<RemotePage>
   RemoteWindowFocus? _windowFocus;
   DesktopFocusTitlebarDrag? _focusTitlebarDrag;
   StreamSubscription<DesktopTabState>? _windowFocusTabSubscription;
+  Worker? _windowFocusCollapseWorker;
   Worker? _waylandKeyboardModeWorker;
   bool _waylandKeyboardModeNormalized = false;
   bool _waylandKeyboardModeNormalizing = false;
@@ -151,11 +152,16 @@ class _RemotePageState extends State<RemotePage>
   void _syncWindowFocusTabBar() {
     if (!mounted) return;
     final focus = _windowFocus;
-    if (focus == null || !_isSelectedTab) return;
+    if (focus == null || !_isSelectedTab) {
+      _focusTitlebarDrag?.reset();
+      return;
+    }
     final selected = focus.selected;
-    final active = selected != null && !selected.minimized;
-    if (!active) _focusTitlebarDrag?.reset();
-    stateGlobal.setWindowFocusHideTabBar(active);
+    final immersive = selected != null &&
+        !selected.minimized &&
+        widget.toolbarState.collapse.isTrue;
+    if (!immersive) _focusTitlebarDrag?.reset();
+    stateGlobal.setWindowFocusHideTabBar(immersive);
   }
 
   void _initStates(String id) {
@@ -175,10 +181,15 @@ class _RemotePageState extends State<RemotePage>
       _focusTitlebarDrag = DesktopFocusTitlebarDrag(
         ffi: _ffi,
         focus: _windowFocus!,
+        isEnabled: () =>
+            widget.toolbarState.collapse.isTrue &&
+            stateGlobal.fullscreen.isFalse,
       );
       _windowFocus!.addListener(_syncWindowFocusTabBar);
       _windowFocusTabSubscription =
           widget.tabController?.state.listen((_) => _syncWindowFocusTabBar());
+      _windowFocusCollapseWorker = ever(
+          widget.toolbarState.collapse, (_) => _syncWindowFocusTabBar());
     }
     if (isMacOS) {
       // SchedulerBinding.instance.lifecycleState is null in the first connection in a new window.
@@ -706,6 +717,7 @@ class _RemotePageState extends State<RemotePage>
 
     _pointerLockCenterDebounceTimer?.cancel();
     _pointerLockCenterDebounceTimer = null;
+    _windowFocusCollapseWorker?.dispose();
     _windowFocusTabSubscription?.cancel();
     _windowFocus?.removeListener(_syncWindowFocusTabBar);
     _focusTitlebarDrag?.reset();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -8,12 +9,14 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
 import '../../common.dart';
+import '../../common/widgets/dialog.dart';
 import '../../consts.dart';
 import '../../mobile/widgets/mobile_video_quality.dart';
 import '../../mobile/widgets/remote_window_focus.dart';
 import '../../models/model.dart';
 import '../../models/state_model.dart';
 import '../../models/window_focus_geometry.dart';
+import 'tabbar_widget.dart' show toggleMaximize;
 
 const desktopVideoQualityOption = 'desktop-video-quality';
 const desktopWindowFocusFitOption = 'desktop-window-focus-fit';
@@ -285,31 +288,48 @@ class DesktopFocusedCursorPainter extends CustomPainter {
       geometry != old.geometry;
 }
 
+enum DesktopTitlebarHit { none, drag, minimize, maximize, close }
+
 class DesktopFocusTitlebarDrag {
   DesktopFocusTitlebarDrag({
     required this.ffi,
     required this.focus,
+    required bool Function() isEnabled,
     VoidCallback? startLocalDrag,
     VoidCallback? endLocalDrag,
+    VoidCallback? minimizeLocalWindow,
+    VoidCallback? toggleLocalMaximize,
+    VoidCallback? closeLocalWindow,
     void Function(PointerDownEvent)? replayPointerDown,
-    bool Function()? isFullscreen,
-  })  : _startLocalDrag = startLocalDrag ?? _defaultStartLocalDrag,
+  })  : _isEnabled = isEnabled,
+        _startLocalDrag = startLocalDrag ?? _defaultStartLocalDrag,
         _endLocalDrag = endLocalDrag ?? _defaultEndLocalDrag,
-        _replayPointerDown = replayPointerDown ?? ffi.inputModel.onPointDownImage,
-        _isFullscreen = isFullscreen ?? (() => stateGlobal.fullscreen.isTrue);
+        _minimizeLocalWindow =
+            minimizeLocalWindow ?? _defaultMinimizeLocalWindow,
+        _toggleLocalMaximize =
+            toggleLocalMaximize ?? _defaultToggleLocalMaximize,
+        _closeLocalWindow =
+            closeLocalWindow ?? (() => unawaited(_defaultCloseLocalWindow(ffi))),
+        _replayPointerDown =
+            replayPointerDown ?? ffi.inputModel.onPointDownImage;
 
   static const double titlebarHeightPx = 40.0;
-  static const double captionButtonsWidthPx = 144.0;
+  static const double captionButtonsWidthPx = 138.0;
   static const double dragThresholdPx = 4.0;
 
   final FFI ffi;
   final RemoteWindowFocus focus;
+  final bool Function() _isEnabled;
   final VoidCallback _startLocalDrag;
   final VoidCallback _endLocalDrag;
+  final VoidCallback _minimizeLocalWindow;
+  final VoidCallback _toggleLocalMaximize;
+  final VoidCallback _closeLocalWindow;
   final void Function(PointerDownEvent) _replayPointerDown;
-  final bool Function() _isFullscreen;
 
   PointerDownEvent? _pendingDown;
+  DesktopTitlebarHit _pendingCaptionButton = DesktopTitlebarHit.none;
+  int? _pendingCaptionPointer;
   bool _draggingLocalWindow = false;
 
   static void _defaultStartLocalDrag() {
@@ -322,12 +342,29 @@ class DesktopFocusTitlebarDrag {
     }
   }
 
-  static bool isInTitlebarDragZone(
+  static void _defaultMinimizeLocalWindow() {
+    WindowController.fromWindowId(stateGlobal.windowId).minimize();
+  }
+
+  static void _defaultToggleLocalMaximize() {
+    toggleMaximize(false).then((maximize) {
+      stateGlobal.setMaximized(maximize);
+    });
+  }
+
+  static Future<void> _defaultCloseLocalWindow(FFI ffi) async {
+    if (await showConnEndAuditDialogCloseCanceled(ffi: ffi)) {
+      return;
+    }
+    closeConnection(id: ffi.id);
+  }
+
+  static DesktopTitlebarHit hitTestTitlebar(
     Offset remotePoint,
     Rect windowRect, {
     double displayScale = 1.0,
   }) {
-    if (windowRect.isEmpty) return false;
+    if (windowRect.isEmpty) return DesktopTitlebarHit.none;
     final scale = displayScale >= 1.0 ? displayScale : 1.0;
     final titlebarHeight =
         math.min(titlebarHeightPx * scale, windowRect.height * 0.25);
@@ -335,13 +372,49 @@ class DesktopFocusTitlebarDrag {
         math.min(captionButtonsWidthPx * scale, windowRect.width * 0.35);
     final relX = remotePoint.dx - windowRect.left;
     final relY = remotePoint.dy - windowRect.top;
-    return relY >= 0 &&
-        relY <= titlebarHeight &&
-        relX >= 0 &&
-        relX < windowRect.width - buttonsWidth;
+    if (relY < 0 || relY > titlebarHeight || relX < 0 || relX > windowRect.width) {
+      return DesktopTitlebarHit.none;
+    }
+    final buttonsStart = windowRect.width - buttonsWidth;
+    if (relX < buttonsStart) {
+      return DesktopTitlebarHit.drag;
+    }
+    final slotWidth = buttonsWidth / 3.0;
+    final offsetInButtons = relX - buttonsStart;
+    if (offsetInButtons < slotWidth) {
+      return DesktopTitlebarHit.minimize;
+    }
+    if (offsetInButtons < slotWidth * 2.0) {
+      return DesktopTitlebarHit.maximize;
+    }
+    return DesktopTitlebarHit.close;
+  }
+
+  DesktopTitlebarHit _hitTestEvent(PointerEvent event) {
+    final chosen = focus.selected;
+    final geometry = ffi.canvasModel.windowFocus;
+    if (chosen == null || chosen.minimized || geometry == null) {
+      return DesktopTitlebarHit.none;
+    }
+    final local = Offset(
+      event.position.dx - CanvasModel.leftToEdge,
+      event.position.dy - CanvasModel.topToEdge,
+    );
+    final remote = geometry.localToDesktop(local);
+    if (remote == null) return DesktopTitlebarHit.none;
+    final pi = ffi.ffiModel.pi;
+    return hitTestTitlebar(
+      remote,
+      chosen.rect,
+      displayScale: pi.scaleOfDisplay(pi.currentDisplay),
+    );
   }
 
   bool handlePointer(PointerEvent event) {
+    if (!_isEnabled()) {
+      reset();
+      return false;
+    }
     if (event is PointerDownEvent) {
       return _handleDown(event);
     }
@@ -359,10 +432,6 @@ class DesktopFocusTitlebarDrag {
 
   bool _handleDown(PointerDownEvent event) {
     reset();
-    if (_isFullscreen()) return false;
-    final chosen = focus.selected;
-    final geometry = ffi.canvasModel.windowFocus;
-    if (chosen == null || chosen.minimized || geometry == null) return false;
     final input = ffi.inputModel;
     if (input.relativeMouseMode.value ||
         input.ctrl ||
@@ -375,24 +444,23 @@ class DesktopFocusTitlebarDrag {
         event.buttons != kPrimaryMouseButton) {
       return false;
     }
-    final local = Offset(
-      event.position.dx - CanvasModel.leftToEdge,
-      event.position.dy - CanvasModel.topToEdge,
-    );
-    final remote = geometry.localToDesktop(local);
-    if (remote == null) return false;
-    final pi = ffi.ffiModel.pi;
-    final displayScale = pi.scaleOfDisplay(pi.currentDisplay);
-    if (!isInTitlebarDragZone(remote, chosen.rect,
-        displayScale: displayScale)) {
-      return false;
+    final hit = _hitTestEvent(event);
+    if (hit == DesktopTitlebarHit.none) return false;
+    if (hit == DesktopTitlebarHit.drag) {
+      _pendingDown = event;
+      return true;
     }
-    _pendingDown = event;
+    _pendingCaptionButton = hit;
+    _pendingCaptionPointer = event.pointer;
     return true;
   }
 
   bool _handleMove(PointerMoveEvent event) {
     if (_draggingLocalWindow) return true;
+    if (_pendingCaptionButton != DesktopTitlebarHit.none &&
+        event.pointer == _pendingCaptionPointer) {
+      return true;
+    }
     final pending = _pendingDown;
     if (pending == null || event.pointer != pending.pointer) return false;
     if ((event.position - pending.position).distance < dragThresholdPx) {
@@ -410,6 +478,29 @@ class DesktopFocusTitlebarDrag {
       _endLocalDrag();
       return true;
     }
+    if (_pendingCaptionButton != DesktopTitlebarHit.none &&
+        event.pointer == _pendingCaptionPointer) {
+      final action = _pendingCaptionButton;
+      _pendingCaptionButton = DesktopTitlebarHit.none;
+      _pendingCaptionPointer = null;
+      if (_hitTestEvent(event) == action) {
+        switch (action) {
+          case DesktopTitlebarHit.minimize:
+            _minimizeLocalWindow();
+            break;
+          case DesktopTitlebarHit.maximize:
+            _toggleLocalMaximize();
+            break;
+          case DesktopTitlebarHit.close:
+            _closeLocalWindow();
+            break;
+          case DesktopTitlebarHit.none:
+          case DesktopTitlebarHit.drag:
+            break;
+        }
+      }
+      return true;
+    }
     final pending = _pendingDown;
     if (pending == null || event.pointer != pending.pointer) return false;
     _pendingDown = null;
@@ -423,6 +514,12 @@ class DesktopFocusTitlebarDrag {
       _endLocalDrag();
       return true;
     }
+    if (_pendingCaptionButton != DesktopTitlebarHit.none &&
+        event.pointer == _pendingCaptionPointer) {
+      _pendingCaptionButton = DesktopTitlebarHit.none;
+      _pendingCaptionPointer = null;
+      return true;
+    }
     if (_pendingDown != null && event.pointer == _pendingDown!.pointer) {
       _pendingDown = null;
       return true;
@@ -432,6 +529,8 @@ class DesktopFocusTitlebarDrag {
 
   void reset() {
     _pendingDown = null;
+    _pendingCaptionButton = DesktopTitlebarHit.none;
+    _pendingCaptionPointer = null;
     if (_draggingLocalWindow) {
       _draggingLocalWindow = false;
       _endLocalDrag();

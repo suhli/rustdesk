@@ -26,7 +26,6 @@ import '../../models/window_focus_geometry.dart';
 import '../../common/shared_state.dart';
 import './popup_menu.dart';
 import './kb_layout_type_chooser.dart';
-import './tabbar_widget.dart' show toggleMaximize;
 import 'package:flutter_hbb/utils/scale.dart';
 import 'package:flutter_hbb/common/widgets/custom_scale_base.dart';
 
@@ -3689,60 +3688,11 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
     }
 
     final axis = widget.isHorizontal ? Axis.horizontal : Axis.vertical;
-    final hideTabBar = stateGlobal.windowFocusHideTabBar;
-    void toggleWindowMaximize() {
-      toggleMaximize(false).then((maximize) {
-        stateGlobal.setMaximized(maximize);
-      });
-    }
-
-    Widget buildWindowDragHandle() {
-      return MouseRegion(
-        cursor: SystemMouseCursors.move,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onDoubleTap: toggleWindowMaximize,
-          onPanStart: (_) {
-            WindowController.fromWindowId(stateGlobal.windowId).startDragging();
-          },
-          onPanCancel: () {
-            if (isMacOS) {
-              WindowController.fromWindowId(stateGlobal.windowId)
-                  .setMovable(false);
-            }
-          },
-          onPanEnd: (_) {
-            if (isMacOS) {
-              WindowController.fromWindowId(stateGlobal.windowId)
-                  .setMovable(false);
-            }
-          },
-          child: SizedBox(
-            width: widget.isHorizontal ? 24 : 20,
-            height: widget.isHorizontal ? 20 : 24,
-            child: Center(
-              child: Icon(
-                Icons.open_with,
-                size: 14,
-                color: MyTheme.color(context).drag_indicator,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
     final child = Flex(
       direction: axis,
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildDraggable(context),
-        if (!isWebDesktop && !kUseCompatibleUiMode)
-          Obx(() => Offstage(
-                offstage:
-                    hideTabBar.isFalse || collapse.isTrue || isFullscreen.isTrue,
-                child: buildWindowDragHandle(),
-              )),
         Obx(() => collapse.isTrue
             ? _MinimizedMonitorSwitchButton(id: widget.id, ffi: widget.ffi)
             : const Offstage()),
@@ -3761,10 +3711,9 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
                 ),
               ),
             )),
-        if (!isMacOS && !isWebDesktop && !kUseCompatibleUiMode)
+        if (!isMacOS && !isWebDesktop)
           Obx(() => Offstage(
-                offstage:
-                    isFullscreen.isFalse && (hideTabBar.isFalse || collapse.isTrue),
+                offstage: isFullscreen.isFalse,
                 child: buttonWrapper(
                   widget.setMinimize,
                   Tooltip(
@@ -3772,27 +3721,6 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
                     child: Icon(
                       Icons.remove,
                       size: iconSize,
-                    ),
-                  ),
-                ),
-              )),
-        if (!isMacOS && !isWebDesktop && !kUseCompatibleUiMode)
-          Obx(() => Offstage(
-                offstage:
-                    hideTabBar.isFalse || collapse.isTrue || isFullscreen.isTrue,
-                child: buttonWrapper(
-                  toggleWindowMaximize,
-                  Tooltip(
-                    message: translate(
-                        stateGlobal.isMaximized.isTrue ? 'Restore' : 'Maximize'),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(
-                        stateGlobal.isMaximized.isTrue
-                            ? IconFont.restore
-                            : IconFont.max,
-                        size: 12,
-                      ),
                     ),
                   ),
                 ),
@@ -3810,28 +3738,6 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
                 ),
               ))),
         ),
-        if (!isMacOS && !isWebDesktop && !kUseCompatibleUiMode)
-          Obx(() => Offstage(
-                offstage: hideTabBar.isFalse || collapse.isTrue,
-                child: buttonWrapper(
-                  () async {
-                    if (await showConnEndAuditDialogCloseCanceled(
-                        ffi: widget.ffi)) {
-                      return;
-                    }
-                    closeConnection(id: widget.id);
-                  },
-                  Tooltip(
-                    message: translate('Close'),
-                    child: Icon(
-                      Icons.close,
-                      size: 17,
-                      color: _ToolbarTheme.redColor,
-                    ),
-                  ),
-                  hoverColor: _ToolbarTheme.redColor,
-                ),
-              )),
         if (isWebDesktop)
           Obx(() {
             if (collapse.isFalse) {

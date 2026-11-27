@@ -335,14 +335,17 @@ void main() {
     expect(state.tabBarHeight, kDesktopRemoteTabBarHeight);
   });
 
-  test('titlebar drag moves local window while clicks replay to remote', () {
+  test(
+      'collapsed focus hooks titlebar drag and min/max/close; expanded unhooks',
+      () {
     final peer = _Peer();
     final session = _Session(peer);
     final focus = RemoteWindowFocus(session, onCrop: (_) {});
     addTearDown(focus.dispose);
 
     const windowRect = Rect.fromLTWH(100, 50, 800, 600);
-    focus.selected = const RemoteAppWindow('1:2', 'Editor', 'code.exe', windowRect);
+    focus.selected =
+        const RemoteAppWindow('1:2', 'Editor', 'code.exe', windowRect);
     session.canvasModel.windowFocus = WindowFocusGeometry.create(
       windowRect,
       const Rect.fromLTWH(0, 0, 1920, 1080),
@@ -350,21 +353,28 @@ void main() {
       WindowFocusFit.contain,
     );
 
+    var toolbarCollapsed = true;
     var dragStarts = 0;
     var dragEnds = 0;
+    var minimizes = 0;
+    var maximizes = 0;
+    var closes = 0;
     final replayedDowns = <PointerDownEvent>[];
     final interceptor = DesktopFocusTitlebarDrag(
       ffi: session,
       focus: focus,
+      isEnabled: () => toolbarCollapsed,
       startLocalDrag: () => dragStarts++,
       endLocalDrag: () => dragEnds++,
+      minimizeLocalWindow: () => minimizes++,
+      toggleLocalMaximize: () => maximizes++,
+      closeLocalWindow: () => closes++,
       replayPointerDown: replayedDowns.add,
-      isFullscreen: () => false,
     );
 
     final edge = Offset(CanvasModel.leftToEdge, CanvasModel.topToEdge);
 
-    // 1. Drag in remote titlebar -> starts local drag, swallows down/move/up.
+    // 1. Drag in remote titlebar -> starts local drag, swallows down/move/cancel.
     final dragDown = PointerDownEvent(
       pointer: 1,
       kind: PointerDeviceKind.mouse,
@@ -413,24 +423,82 @@ void main() {
     expect(replayedDowns, [clickDown]);
     expect(dragStarts, 1);
 
-    // 3. Top-right remote caption buttons and client area are never intercepted.
+    // 3. Top-right remote caption buttons map to local minimize / maximize / close.
+    // buttonsStart = 800 - 138 = 662; slots: [662, 708), [708, 754), [754, 800].
+    for (final (pointer, x) in [(3, 680.0), (4, 730.0), (5, 780.0)]) {
+      expect(
+        interceptor.handlePointer(PointerDownEvent(
+          pointer: pointer,
+          kind: PointerDeviceKind.mouse,
+          buttons: kPrimaryMouseButton,
+          position: edge + Offset(x, 20),
+        )),
+        isTrue,
+      );
+      expect(
+        interceptor.handlePointer(PointerUpEvent(
+          pointer: pointer,
+          kind: PointerDeviceKind.mouse,
+          position: edge + Offset(x, 20),
+        )),
+        isTrue,
+      );
+    }
+    expect(minimizes, 1);
+    expect(maximizes, 1);
+    expect(closes, 1);
+
+    // 4. Dragging off a caption button before release cancels cleanly.
     expect(
       interceptor.handlePointer(PointerDownEvent(
-        pointer: 3,
+        pointer: 6,
         kind: PointerDeviceKind.mouse,
         buttons: kPrimaryMouseButton,
-        position: edge + const Offset(760, 20),
+        position: edge + const Offset(780, 20),
       )),
-      isFalse,
+      isTrue,
     );
     expect(
+      interceptor.handlePointer(PointerUpEvent(
+        pointer: 6,
+        kind: PointerDeviceKind.mouse,
+        position: edge + const Offset(400, 200),
+      )),
+      isTrue,
+    );
+    expect(closes, 1);
+
+    // 5. Client area below titlebar passes through unhooked.
+    expect(
       interceptor.handlePointer(PointerDownEvent(
-        pointer: 4,
+        pointer: 7,
         kind: PointerDeviceKind.mouse,
         buttons: kPrimaryMouseButton,
         position: edge + const Offset(200, 200),
       )),
       isFalse,
     );
+
+    // 6. Expanding toolbar unhooks both titlebar drag and caption buttons.
+    toolbarCollapsed = false;
+    expect(
+      interceptor.handlePointer(PointerDownEvent(
+        pointer: 8,
+        kind: PointerDeviceKind.mouse,
+        buttons: kPrimaryMouseButton,
+        position: edge + const Offset(200, 20),
+      )),
+      isFalse,
+    );
+    expect(
+      interceptor.handlePointer(PointerDownEvent(
+        pointer: 9,
+        kind: PointerDeviceKind.mouse,
+        buttons: kPrimaryMouseButton,
+        position: edge + const Offset(780, 20),
+      )),
+      isFalse,
+    );
+    expect(closes, 1);
   });
 }
