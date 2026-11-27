@@ -1184,7 +1184,15 @@ impl<T: InvokeUiSession> Session<T> {
         send_pointer_device_event(event, false, false, false, false, self);
     }
 
-    #[cfg(all(feature = "flutter", any(target_os = "android", target_os = "ios")))]
+    #[cfg(all(
+        feature = "flutter",
+        any(
+            target_os = "android",
+            target_os = "ios",
+            target_os = "windows",
+            target_os = "macos"
+        )
+    ))]
     pub(crate) fn request_remote_windows(&self) {
         let mut misc = Misc::new();
         misc.set_request_remote_windows(true);
@@ -1193,7 +1201,15 @@ impl<T: InvokeUiSession> Session<T> {
         self.send(Data::Message(message));
     }
 
-    #[cfg(all(feature = "flutter", any(target_os = "android", target_os = "ios")))]
+    #[cfg(all(
+        feature = "flutter",
+        any(
+            target_os = "android",
+            target_os = "ios",
+            target_os = "windows",
+            target_os = "macos"
+        )
+    ))]
     pub(crate) fn activate_remote_window(&self, id: String) {
         let mut misc = Misc::new();
         misc.set_activate_remote_window(id);
@@ -1735,7 +1751,15 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn set_peer_info(&self, peer_info: &PeerInfo); // flutter
     fn set_displays(&self, displays: &Vec<DisplayInfo>);
     fn set_platform_additions(&self, data: &str);
-    #[cfg(all(feature = "flutter", any(target_os = "android", target_os = "ios")))]
+    #[cfg(all(
+        feature = "flutter",
+        any(
+            target_os = "android",
+            target_os = "ios",
+            target_os = "windows",
+            target_os = "macos"
+        )
+    ))]
     fn remote_windows(&self, _snapshot: RemoteWindowSnapshot) {}
     fn on_connected(&self, conn_type: ConnType);
     fn update_privacy_mode(&self);

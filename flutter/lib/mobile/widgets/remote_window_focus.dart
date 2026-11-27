@@ -50,10 +50,13 @@ class RemoteAppWindow {
 }
 
 class RemoteWindowFocus extends ChangeNotifier {
-  RemoteWindowFocus(this.ffi, {required this.onCrop});
+  RemoteWindowFocus(this.ffi,
+      {required this.onCrop, String fitOption = _fitOption})
+      : _fitOptionKey = fitOption;
 
   final FFI ffi;
   final ValueChanged<Rect?> onCrop;
+  final String _fitOptionKey;
   List<RemoteAppWindow>? _windows;
   RemoteAppWindow? selected;
   WindowFocusFit fit = WindowFocusFit.contain;
@@ -91,7 +94,7 @@ class RemoteWindowFocus extends ChangeNotifier {
       return;
     }
     fit = WindowFocusFit.values.firstWhere(
-      (fit) => fit.name == bind.getLocalFlutterOption(k: _fitOption),
+      (fit) => fit.name == bind.getLocalFlutterOption(k: _fitOptionKey),
       orElse: () => WindowFocusFit.contain,
     );
     _picking = true;
@@ -279,7 +282,7 @@ class RemoteWindowFocus extends ChangeNotifier {
 
   void setFit(WindowFocusFit value) {
     fit = value;
-    unawaited(bind.setLocalFlutterOption(k: _fitOption, v: value.name));
+    unawaited(bind.setLocalFlutterOption(k: _fitOptionKey, v: value.name));
     notifyListeners();
   }
 

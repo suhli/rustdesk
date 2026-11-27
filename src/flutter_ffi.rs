@@ -2085,7 +2085,12 @@ pub fn session_send_mouse(session_id: SessionID, msg: String) {
             } << 3;
         }
         if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-            #[cfg(any(target_os = "android", target_os = "ios"))]
+            #[cfg(any(
+                target_os = "android",
+                target_os = "ios",
+                target_os = "windows",
+                target_os = "macos"
+            ))]
             if let (Some(x), Some(y)) = (
                 m.get("focus_x").and_then(|x| x.parse().ok()),
                 m.get("focus_y").and_then(|y| y.parse().ok()),

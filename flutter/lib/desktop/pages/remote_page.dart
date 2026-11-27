@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +21,10 @@ import '../../models/platform_model.dart';
 import '../../models/shortcut_model.dart';
 import '../../common/shared_state.dart';
 import '../../utils/image.dart';
+import '../../mobile/widgets/mobile_video_quality.dart';
+import '../../mobile/widgets/remote_window_focus.dart';
 import '../widgets/remote_toolbar.dart';
+import '../widgets/remote_window_focus.dart';
 import '../widgets/kb_layout_type_chooser.dart';
 import '../widgets/tabbar_widget.dart';
 import 'macos_full_screen_focus_recovery.dart';
@@ -130,6 +134,8 @@ class _RemotePageState extends State<RemotePage>
   Function(bool)? _onEnterOrLeaveImage4Toolbar;
 
   late FFI _ffi;
+  MobileVideoQuality? _videoQuality;
+  RemoteWindowFocus? _windowFocus;
   Worker? _waylandKeyboardModeWorker;
   bool _waylandKeyboardModeNormalized = false;
   bool _waylandKeyboardModeNormalizing = false;
@@ -151,6 +157,8 @@ class _RemotePageState extends State<RemotePage>
   void initState() {
     super.initState();
     _ffi = FFI(widget.sessionId);
+    _videoQuality = createDesktopVideoQuality();
+    _windowFocus = createDesktopWindowFocus(_ffi);
     if (isMacOS) {
       // SchedulerBinding.instance.lifecycleState is null in the first connection in a new window.
       _macOSLifecycleState = SchedulerBinding.instance.lifecycleState;
@@ -518,6 +526,7 @@ class _RemotePageState extends State<RemotePage>
     if (isWindows || isMacOS) {
       _isWindowBlur = false;
     }
+    _videoQuality?.setForeground(true);
     if (isMacOS) stateGlobal.getInputSource(force: true);
     stateGlobal.isFocused.value = true;
 
@@ -570,6 +579,7 @@ class _RemotePageState extends State<RemotePage>
       _isWindowBlur = false;
     }
     WakelockManager.enable(_uniqueKey);
+    _videoQuality?.setForeground(true);
     // Update pointer lock center when window is restored
     _updatePointerLockCenterIfNeeded();
   }
@@ -579,6 +589,7 @@ class _RemotePageState extends State<RemotePage>
   void onWindowMaximize() {
     super.onWindowMaximize();
     WakelockManager.enable(_uniqueKey);
+    _videoQuality?.setForeground(true);
     // Update pointer lock center when window is maximized
     _updatePointerLockCenterIfNeeded();
   }
@@ -619,6 +630,7 @@ class _RemotePageState extends State<RemotePage>
   void onWindowMinimize() {
     super.onWindowMinimize();
     WakelockManager.disable(_uniqueKey);
+    _videoQuality?.setForeground(false);
     if (isMacOS) {
       _macOSFullScreenFocusRecovery.cancel();
       _isWindowBlur = true;
@@ -672,6 +684,8 @@ class _RemotePageState extends State<RemotePage>
 
     _pointerLockCenterDebounceTimer?.cancel();
     _pointerLockCenterDebounceTimer = null;
+    _windowFocus?.dispose();
+    _videoQuality?.dispose();
     _waylandKeyboardModeWorker?.dispose();
     // Clear callback reference to prevent memory leaks and stale references
     _ffi.inputModel.onRelativeMouseModeDisabled = null;
@@ -729,6 +743,8 @@ class _RemotePageState extends State<RemotePage>
             }
           },
           setRemoteState: setState,
+          windowFocus: _windowFocus,
+          videoQuality: _videoQuality,
         );
 
     bodyWidget() {
@@ -987,6 +1003,8 @@ class _RemotePageState extends State<RemotePage>
                             _buildRawTouchAndPointerRegion(
                                 child, enterView, leaveView),
                         ffi: _ffi,
+                        windowFocus: _windowFocus,
+                        videoQuality: _videoQuality,
                       );
                     }),
             );
@@ -1002,6 +1020,7 @@ class _RemotePageState extends State<RemotePage>
               : CursorPaint(
                   id: widget.id,
                   zoomCursor: _zoomCursor,
+                  windowFocus: _windowFocus,
                 )));
     }
     paints.add(
@@ -1089,6 +1108,8 @@ class ImagePaint extends StatefulWidget {
   final RxBool keyboardEnabled;
   final RxBool remoteCursorMoved;
   final Widget Function(Widget)? listenerBuilder;
+  final RemoteWindowFocus? windowFocus;
+  final MobileVideoQuality? videoQuality;
 
   ImagePaint(
       {Key? key,
@@ -1098,7 +1119,9 @@ class ImagePaint extends StatefulWidget {
       required this.cursorOverImage,
       required this.keyboardEnabled,
       required this.remoteCursorMoved,
-      this.listenerBuilder})
+      this.listenerBuilder,
+      this.windowFocus,
+      this.videoQuality})
       : super(key: key);
 
   @override
@@ -1118,6 +1141,16 @@ class _ImagePaintState extends State<ImagePaint> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.windowFocus == null && widget.videoQuality == null) {
+      return _buildContent(context);
+    }
+    return AnimatedBuilder(
+      animation: Listenable.merge([widget.windowFocus, widget.videoQuality]),
+      builder: (context, _) => _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final m = Provider.of<ImageModel>(context);
     var c = Provider.of<CanvasModel>(context);
     final s = c.scale;
@@ -1162,49 +1195,68 @@ class _ImagePaintState extends State<ImagePaint> {
               onHover: (evt) {},
               child: child);
         });
-    if (c.imageOverflow.isTrue && c.scrollStyle != ScrollStyle.scrollauto) {
-      final paintWidth = c.getDisplayWidth() * s;
-      final paintHeight = c.getDisplayHeight() * s;
-      final paintSize = Size(paintWidth, paintHeight);
-      final paintWidget =
-          m.useTextureRender || widget.ffi.ffiModel.pi.forceTextureRender
-              ? _BuildPaintTextureRender(
-                  c, s, Offset.zero, paintSize, isViewOriginal())
-              : _buildScrollbarNonTextureRender(m, paintSize, s);
-      return NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            c.updateScrollPercent();
-            return false;
-          },
-          child: mouseRegion(
-            child: Obx(() => _buildCrossScrollbarFromLayout(
-                  context,
-                  _buildListener(paintWidget),
-                  c.size,
-                  paintSize,
-                  c.scrollHorizontal,
-                  c.scrollVertical,
-                )),
-          ));
-    } else {
-      if (c.size.width > 0 && c.size.height > 0) {
+
+    Widget buildDesktopCanvas() {
+      if (c.imageOverflow.isTrue && c.scrollStyle != ScrollStyle.scrollauto) {
+        final paintWidth = c.getDisplayWidth() * s;
+        final paintHeight = c.getDisplayHeight() * s;
+        final paintSize = Size(paintWidth, paintHeight);
         final paintWidget =
             m.useTextureRender || widget.ffi.ffiModel.pi.forceTextureRender
                 ? _BuildPaintTextureRender(
-                    c,
-                    s,
-                    Offset(
-                      isLinux ? c.x.toInt().toDouble() : c.x,
-                      isLinux ? c.y.toInt().toDouble() : c.y,
-                    ),
+                    c, s, Offset.zero, paintSize, isViewOriginal())
+                : _buildScrollbarNonTextureRender(m, paintSize, s);
+        return NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              c.updateScrollPercent();
+              return false;
+            },
+            child: mouseRegion(
+              child: Obx(() => _buildCrossScrollbarFromLayout(
+                    context,
+                    _buildListener(paintWidget),
                     c.size,
-                    isViewOriginal())
-                : _buildScrollAutoNonTextureRender(m, c, s);
-        return mouseRegion(child: _buildListener(paintWidget));
+                    paintSize,
+                    c.scrollHorizontal,
+                    c.scrollVertical,
+                  )),
+            ));
       } else {
-        return Container();
+        if (c.size.width > 0 && c.size.height > 0) {
+          final paintWidget =
+              m.useTextureRender || widget.ffi.ffiModel.pi.forceTextureRender
+                  ? _BuildPaintTextureRender(
+                      c,
+                      s,
+                      Offset(
+                        isLinux ? c.x.toInt().toDouble() : c.x,
+                        isLinux ? c.y.toInt().toDouble() : c.y,
+                      ),
+                      c.size,
+                      isViewOriginal())
+                  : _buildScrollAutoNonTextureRender(m, c, s);
+          return mouseRegion(child: _buildListener(paintWidget));
+        } else {
+          return Container();
+        }
       }
     }
+
+    final focus = widget.windowFocus;
+    if (focus != null &&
+        focus.selected != null &&
+        !focus.selected!.minimized) {
+      return DesktopWindowFocusView(
+        focus: focus,
+        useTextureRender:
+            m.useTextureRender || widget.ffi.ffiModel.pi.forceTextureRender,
+        enhancement: widget.videoQuality,
+        wrapSurface: (child) => mouseRegion(child: _buildListener(child)),
+        fallback: buildDesktopCanvas,
+      );
+    }
+    c.windowFocus = null;
+    return buildDesktopCanvas();
   }
 
   /// Matches desktop cursors to the rendered image and native pixel units.
@@ -1212,6 +1264,12 @@ class _ImagePaintState extends State<ImagePaint> {
   /// Windows cursor pixels are physical; NSCursor/GdkCursor use logical pixels.
   /// Unzoomed Adaptive/Custom views preserve macOS cursors' point dimensions.
   double _getDesktopCursorScale(CanvasModel c, double dpr) {
+    final focus = c.windowFocus;
+    if (focus != null) {
+      final scale = _getCursorScaleForDisplay(
+          zoomCursor.value ? math.min(focus.scaleX, focus.scaleY) : 1.0);
+      return isWindows ? scale : scale / dpr;
+    }
     final peer = widget.ffi.ffiModel;
     if (!zoomCursor.value &&
         peer.pi.platform == kPeerPlatformMacOS &&
@@ -1268,6 +1326,15 @@ class _ImagePaintState extends State<ImagePaint> {
         sizeScale = s / displays[0].scale;
       }
     }
+    final enhanced = buildDesktopEnhancedNonTexturePaint(
+      image: m.image,
+      size: imageSize,
+      offsetX: 0,
+      offsetY: 0,
+      scale: sizeScale,
+      enhancement: widget.videoQuality,
+    );
+    if (enhanced != null) return enhanced;
     return CustomPaint(
       size: imageSize,
       painter: ImagePainter(image: m.image, x: 0, y: 0, scale: sizeScale),
@@ -1283,8 +1350,18 @@ class _ImagePaintState extends State<ImagePaint> {
         sizeScale = s / displays[0].scale;
       }
     }
+    final size = Size(c.size.width, c.size.height);
+    final enhanced = buildDesktopEnhancedNonTexturePaint(
+      image: m.image,
+      size: size,
+      offsetX: c.x,
+      offsetY: c.y,
+      scale: sizeScale,
+      enhancement: widget.videoQuality,
+    );
+    if (enhanced != null) return enhanced;
     return CustomPaint(
-      size: Size(c.size.width, c.size.height),
+      size: size,
       painter: ImagePainter(
           image: m.image,
           x: c.x / sizeScale,
@@ -1318,8 +1395,10 @@ class _ImagePaintState extends State<ImagePaint> {
           child: _trackCursorDisplay(
             Obx(() => Texture(
                   textureId: textureId.value,
-                  filterQuality:
-                      isViewOriginal ? FilterQuality.none : FilterQuality.low,
+                  filterQuality: desktopTextureFilterQuality(
+                    isViewOriginal: isViewOriginal,
+                    enhancement: widget.videoQuality,
+                  ),
                 )),
             displays[i],
           ),
@@ -1454,15 +1533,25 @@ class _ImagePaintState extends State<ImagePaint> {
 class CursorPaint extends StatelessWidget {
   final String id;
   final RxBool zoomCursor;
+  final RemoteWindowFocus? windowFocus;
 
   const CursorPaint({
     Key? key,
     required this.id,
     required this.zoomCursor,
+    this.windowFocus,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    if (windowFocus == null) return _buildCursor(context);
+    return AnimatedBuilder(
+      animation: windowFocus!,
+      builder: (context, _) => _buildCursor(context),
+    );
+  }
+
+  Widget _buildCursor(BuildContext context) {
     final m = Provider.of<CursorModel>(context);
     final c = Provider.of<CanvasModel>(context);
     double hotx = m.hotx;
@@ -1472,6 +1561,19 @@ class CursorPaint extends StatelessWidget {
         hotx = preDefaultCursor.image!.width / 2;
         hoty = preDefaultCursor.image!.height / 2;
       }
+    }
+    final focus = c.windowFocus;
+    if (focus != null) {
+      return CustomPaint(
+        size: focus.viewport.size,
+        painter: DesktopFocusedCursorPainter(
+          geometry: focus,
+          cursor: m.image ?? preDefaultCursor.image,
+          position: m.offset,
+          hotspot: Offset(hotx, hoty),
+          zoomCursor: zoomCursor.value,
+        ),
+      );
     }
 
     double cx = c.x;

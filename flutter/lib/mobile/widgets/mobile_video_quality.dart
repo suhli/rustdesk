@@ -14,13 +14,17 @@ const mobileSuperResolutionShader = 'shaders/mobile_super_resolution.frag';
 typedef MobileVideoFrame = ({ui.Image image, Rect region});
 
 class MobileVideoQuality extends ChangeNotifier {
-  MobileVideoQuality()
-      : mode = MobileVideoQualityMode.values.firstWhere(
-            (mode) =>
-                mode.name == bind.getLocalFlutterOption(k: _qualityOption),
+  MobileVideoQuality({
+    String optionKey = _qualityOption,
+    this.inputPixelLimit = maxInputPixels,
+  })  : _optionKey = optionKey,
+        mode = MobileVideoQualityMode.values.firstWhere(
+            (mode) => mode.name == bind.getLocalFlutterOption(k: optionKey),
             orElse: () => MobileVideoQualityMode.off);
 
   static const maxInputPixels = 640 * 1024;
+  final String _optionKey;
+  final int inputPixelLimit;
   final _clock = Stopwatch()..start();
   MobileVideoQualityMode mode;
   Future<ui.FragmentProgram>? _program;
@@ -52,7 +56,7 @@ class MobileVideoQuality extends ChangeNotifier {
     _processed = 0;
     _presented = 0;
     _clearCache();
-    unawaited(bind.setLocalFlutterOption(k: _qualityOption, v: value.name));
+    unawaited(bind.setLocalFlutterOption(k: _optionKey, v: value.name));
     notifyListeners();
   }
 
@@ -70,7 +74,7 @@ class MobileVideoQuality extends ChangeNotifier {
     }
     if (region.isEmpty ||
         region.longestSide > 1920 ||
-        region.width * region.height > maxInputPixels) {
+        region.width * region.height > inputPixelLimit) {
       return original;
     }
     _latest = original;

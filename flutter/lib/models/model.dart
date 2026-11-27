@@ -2004,7 +2004,9 @@ class ImageModel with ChangeNotifier {
       image?.dispose();
       return;
     }
-    if (isMobile && image != null) mobileImageDisplay = display;
+    if ((isMobile || isWindows || isMacOS) && image != null) {
+      mobileImageDisplay = display;
+    }
     await update(image);
   }
 

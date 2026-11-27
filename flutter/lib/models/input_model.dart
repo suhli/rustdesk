@@ -2032,7 +2032,10 @@ class InputModel {
       }
       final focus = parent.target?.canvasModel.windowFocus;
       if (focus != null) {
-        final remote = focus.localToDesktop(_pointerPositionForRemoteCanvas(e));
+        final pos = _pointerPositionForRemoteCanvas(e);
+        final local = Offset(
+            pos.dx - CanvasModel.leftToEdge, pos.dy - CanvasModel.topToEdge);
+        final remote = focus.localToDesktop(local);
         if (remote == null) return;
         bind.sessionSendMouse(sessionId: sessionId, msg: jsonEncode({
           'type': 'wheel', 'x': '$dx', 'y': '$dy',

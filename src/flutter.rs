@@ -956,7 +956,12 @@ impl InvokeUiSession for FlutterHandler {
         )
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "macos"
+    ))]
     fn remote_windows(&self, snapshot: RemoteWindowSnapshot) {
         let windows: Vec<_> = snapshot
             .windows
@@ -1979,13 +1984,23 @@ pub fn session_send_pointer(session_id: SessionID, msg: String) {
                 Some("touch") => session_send_touch_event(session_id, v, alt, ctrl, shift, command),
                 #[cfg(any(target_os = "android", target_os = "ios"))]
                 Some("native-touch") => session_send_native_touch(session_id, v),
-                #[cfg(any(target_os = "android", target_os = "ios"))]
+                #[cfg(any(
+                    target_os = "android",
+                    target_os = "ios",
+                    target_os = "windows",
+                    target_os = "macos"
+                ))]
                 Some("remote-windows") => {
                     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
                         session.request_remote_windows();
                     }
                 }
-                #[cfg(any(target_os = "android", target_os = "ios"))]
+                #[cfg(any(
+                    target_os = "android",
+                    target_os = "ios",
+                    target_os = "windows",
+                    target_os = "macos"
+                ))]
                 Some("activate-remote-window") => {
                     if let (Some(id), Some(session)) = (
                         v.as_str(),

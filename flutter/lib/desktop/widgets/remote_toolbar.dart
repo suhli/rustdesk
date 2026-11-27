@@ -18,8 +18,11 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:window_size/window_size.dart' as window_size;
 
 import '../../common.dart';
+import '../../mobile/widgets/mobile_video_quality.dart';
+import '../../mobile/widgets/remote_window_focus.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
+import '../../models/window_focus_geometry.dart';
 import '../../common/shared_state.dart';
 import './popup_menu.dart';
 import './kb_layout_type_chooser.dart';
@@ -444,6 +447,8 @@ class RemoteToolbar extends StatefulWidget {
   final Function(int, Function(bool)) onEnterOrLeaveImageSetter;
   final Function(int) onEnterOrLeaveImageCleaner;
   final Function(VoidCallback) setRemoteState;
+  final RemoteWindowFocus? windowFocus;
+  final MobileVideoQuality? videoQuality;
 
   RemoteToolbar({
     Key? key,
@@ -453,6 +458,8 @@ class RemoteToolbar extends StatefulWidget {
     required this.onEnterOrLeaveImageSetter,
     required this.onEnterOrLeaveImageCleaner,
     required this.setRemoteState,
+    this.windowFocus,
+    this.videoQuality,
   }) : super(key: key);
 
   @override
@@ -836,11 +843,16 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
 
     toolbarItems
         .add(_ControlMenu(id: widget.id, ffi: widget.ffi, state: widget.state));
+    if (widget.windowFocus case final focus?) {
+      toolbarItems.add(_WindowFocusMenuButton(ffi: widget.ffi, focus: focus));
+    }
     toolbarItems.add(_DisplayMenu(
       id: widget.id,
       ffi: widget.ffi,
       state: widget.state,
       setFullscreen: _setFullscreen,
+      windowFocus: widget.windowFocus,
+      videoQuality: widget.videoQuality,
     ));
     // Do not show keyboard for camera connection type.
     if (widget.ffi.connType == ConnType.defaultConn) {
@@ -972,6 +984,43 @@ class _MobileActionMenu extends StatelessWidget {
               ? _ToolbarTheme.hoverBlueColor
               : _ToolbarTheme.hoverInactiveColor,
         ));
+  }
+}
+
+class _WindowFocusMenuButton extends StatelessWidget {
+  final FFI ffi;
+  final RemoteWindowFocus focus;
+  const _WindowFocusMenuButton({required this.ffi, required this.focus});
+
+  @override
+  Widget build(BuildContext context) {
+    if (ffi.connType != ConnType.defaultConn) return const Offstage();
+    return AnimatedBuilder(
+      animation: Listenable.merge([focus, ffi.ffiModel]),
+      builder: (context, _) {
+        if (!ffi.ffiModel.isPeerWindows) return const Offstage();
+        final active = focus.selected != null;
+        return _IconMenuButton(
+          icon: Icon(
+            active ? Icons.center_focus_strong : Icons.center_focus_weak,
+            color: Colors.white,
+            size: 20,
+          ),
+          tooltip: active ? 'Exit window focus' : 'Focus a remote window',
+          onPressed: () {
+            if (active) {
+              focus.clear();
+            } else {
+              unawaited(focus.pick(context));
+            }
+          },
+          color: active ? _ToolbarTheme.blueColor : _ToolbarTheme.inactiveColor,
+          hoverColor: active
+              ? _ToolbarTheme.hoverBlueColor
+              : _ToolbarTheme.hoverInactiveColor,
+        );
+      },
+    );
   }
 }
 
@@ -1715,11 +1764,15 @@ class _DisplayMenu extends StatefulWidget {
   final FFI ffi;
   final ToolbarState state;
   final Function(bool) setFullscreen;
+  final RemoteWindowFocus? windowFocus;
+  final MobileVideoQuality? videoQuality;
   const _DisplayMenu(
       {required this.id,
       required this.ffi,
       required this.state,
-      required this.setFullscreen});
+      required this.setFullscreen,
+      this.windowFocus,
+      this.videoQuality});
 
   @override
   State<_DisplayMenu> createState() => _DisplayMenuState();
@@ -1762,7 +1815,9 @@ class _DisplayMenuState extends State<_DisplayMenu> {
         _screenAdjustor.adjustWindow(context),
         viewStyle(customPercent: _customPercent),
         scrollStyle(state, colorScheme),
+        if (widget.windowFocus?.selected != null) windowFocusFit(),
         imageQuality(),
+        if (widget.videoQuality != null) videoEnhancement(),
         codec(),
         if (ffi.connType == ConnType.defaultConn)
           _ResolutionsMenu(
@@ -1983,6 +2038,52 @@ class _DisplayMenuState extends State<_DisplayMenu> {
                 .toList(),
           );
         });
+  }
+
+  Widget windowFocusFit() {
+    final focus = widget.windowFocus!;
+    return _SubmenuButton(
+      ffi: widget.ffi,
+      child: Text(translate('Window scaling')),
+      menuChildren: const {
+        WindowFocusFit.contain: 'Contain',
+        WindowFocusFit.cover: 'Cover',
+        WindowFocusFit.stretch: 'Stretch',
+      }
+          .entries
+          .map((entry) => RdoMenuButton<WindowFocusFit>(
+              value: entry.key,
+              groupValue: focus.fit,
+              onChanged: (value) {
+                if (value != null) focus.setFit(value);
+              },
+              child: Text(translate(entry.value)),
+              ffi: ffi))
+          .toList(),
+    );
+  }
+
+  Widget videoEnhancement() {
+    final quality = widget.videoQuality!;
+    return _SubmenuButton(
+      ffi: widget.ffi,
+      child: Text(translate('Local video enhancement')),
+      menuChildren: const {
+        MobileVideoQualityMode.off: 'Off',
+        MobileVideoQualityMode.standard: 'GPU enhancement',
+        MobileVideoQualityMode.ai: 'AI super-resolution',
+      }
+          .entries
+          .map((entry) => RdoMenuButton<MobileVideoQualityMode>(
+              value: entry.key,
+              groupValue: quality.mode,
+              onChanged: (value) {
+                if (value != null) quality.setMode(value);
+              },
+              child: Text(translate(entry.value)),
+              ffi: ffi))
+          .toList(),
+    );
   }
 
   codec() {
