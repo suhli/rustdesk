@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/remote_window_focus.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_hbb/generated_bridge.dart' show RustdeskImpl;
 import 'package:flutter_hbb/mobile/widgets/mobile_video_quality.dart';
 import 'package:flutter_hbb/mobile/widgets/remote_window_focus.dart';
 import 'package:flutter_hbb/models/desktop_render_texture.dart';
+import 'package:flutter_hbb/models/input_model.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -87,6 +89,19 @@ class _Texture extends Fake implements TextureModel {
   RxInt getTextureId(int display) => id;
 }
 
+class _Input extends Fake implements InputModel {
+  @override
+  final relativeMouseMode = false.obs;
+  @override
+  bool ctrl = false;
+  @override
+  bool alt = false;
+  @override
+  bool shift = false;
+  @override
+  bool command = false;
+}
+
 class _Session extends Fake implements FFI {
   _Session(this.ffiModel);
 
@@ -94,6 +109,8 @@ class _Session extends Fake implements FFI {
   final FfiModel ffiModel;
   @override
   final CanvasModel canvasModel = _Canvas();
+  @override
+  final InputModel inputModel = _Input();
   @override
   final TextureModel textureModel = _Texture();
   @override
@@ -316,5 +333,104 @@ void main() {
     state.setWindowFocusHideTabBar(false);
     expect(state.showTabBar.value, isTrue);
     expect(state.tabBarHeight, kDesktopRemoteTabBarHeight);
+  });
+
+  test('titlebar drag moves local window while clicks replay to remote', () {
+    final peer = _Peer();
+    final session = _Session(peer);
+    final focus = RemoteWindowFocus(session, onCrop: (_) {});
+    addTearDown(focus.dispose);
+
+    const windowRect = Rect.fromLTWH(100, 50, 800, 600);
+    focus.selected = const RemoteAppWindow('1:2', 'Editor', 'code.exe', windowRect);
+    session.canvasModel.windowFocus = WindowFocusGeometry.create(
+      windowRect,
+      const Rect.fromLTWH(0, 0, 1920, 1080),
+      const Size(800, 600),
+      WindowFocusFit.contain,
+    );
+
+    var dragStarts = 0;
+    var dragEnds = 0;
+    final replayedDowns = <PointerDownEvent>[];
+    final interceptor = DesktopFocusTitlebarDrag(
+      ffi: session,
+      focus: focus,
+      startLocalDrag: () => dragStarts++,
+      endLocalDrag: () => dragEnds++,
+      replayPointerDown: replayedDowns.add,
+      isFullscreen: () => false,
+    );
+
+    final edge = Offset(CanvasModel.leftToEdge, CanvasModel.topToEdge);
+
+    // 1. Drag in remote titlebar -> starts local drag, swallows down/move/up.
+    final dragDown = PointerDownEvent(
+      pointer: 1,
+      kind: PointerDeviceKind.mouse,
+      buttons: kPrimaryMouseButton,
+      position: edge + const Offset(200, 20),
+    );
+    expect(interceptor.handlePointer(dragDown), isTrue);
+    expect(dragStarts, 0);
+    expect(
+      interceptor.handlePointer(PointerMoveEvent(
+        pointer: 1,
+        kind: PointerDeviceKind.mouse,
+        buttons: kPrimaryMouseButton,
+        position: edge + const Offset(210, 20),
+      )),
+      isTrue,
+    );
+    expect(dragStarts, 1);
+    expect(replayedDowns, isEmpty);
+    expect(
+      interceptor.handlePointer(PointerCancelEvent(
+        pointer: 1,
+        kind: PointerDeviceKind.mouse,
+        position: edge + const Offset(210, 20),
+      )),
+      isTrue,
+    );
+    expect(dragEnds, 1);
+
+    // 2. Click in remote titlebar (no drag) -> replays down and passes up.
+    final clickDown = PointerDownEvent(
+      pointer: 2,
+      kind: PointerDeviceKind.mouse,
+      buttons: kPrimaryMouseButton,
+      position: edge + const Offset(200, 20),
+    );
+    expect(interceptor.handlePointer(clickDown), isTrue);
+    expect(
+      interceptor.handlePointer(PointerUpEvent(
+        pointer: 2,
+        kind: PointerDeviceKind.mouse,
+        position: edge + const Offset(201, 20),
+      )),
+      isFalse,
+    );
+    expect(replayedDowns, [clickDown]);
+    expect(dragStarts, 1);
+
+    // 3. Top-right remote caption buttons and client area are never intercepted.
+    expect(
+      interceptor.handlePointer(PointerDownEvent(
+        pointer: 3,
+        kind: PointerDeviceKind.mouse,
+        buttons: kPrimaryMouseButton,
+        position: edge + const Offset(760, 20),
+      )),
+      isFalse,
+    );
+    expect(
+      interceptor.handlePointer(PointerDownEvent(
+        pointer: 4,
+        kind: PointerDeviceKind.mouse,
+        buttons: kPrimaryMouseButton,
+        position: edge + const Offset(200, 200),
+      )),
+      isFalse,
+    );
   });
 }

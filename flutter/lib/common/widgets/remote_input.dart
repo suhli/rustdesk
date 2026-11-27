@@ -599,6 +599,7 @@ class RawPointerMouseRegion extends StatelessWidget {
   final PointerExitEventListener? onExit;
   final PointerDownEventListener? onPointerDown;
   final PointerUpEventListener? onPointerUp;
+  final bool Function(PointerEvent)? onInterceptPointer;
 
   RawPointerMouseRegion({
     this.onEnter,
@@ -606,6 +607,7 @@ class RawPointerMouseRegion extends StatelessWidget {
     this.cursor,
     this.onPointerDown,
     this.onPointerUp,
+    this.onInterceptPointer,
     required this.inputModel,
     required this.child,
   });
@@ -616,13 +618,19 @@ class RawPointerMouseRegion extends StatelessWidget {
       onPointerHover: inputModel.onPointHoverImage,
       onPointerDown: (evt) {
         onPointerDown?.call(evt);
+        if (onInterceptPointer?.call(evt) == true) return;
         inputModel.onPointDownImage(evt);
       },
       onPointerUp: (evt) {
         onPointerUp?.call(evt);
+        if (onInterceptPointer?.call(evt) == true) return;
         inputModel.onPointUpImage(evt);
       },
-      onPointerMove: inputModel.onPointMoveImage,
+      onPointerMove: (evt) {
+        if (onInterceptPointer?.call(evt) == true) return;
+        inputModel.onPointMoveImage(evt);
+      },
+      onPointerCancel: onInterceptPointer,
       onPointerSignal: inputModel.onPointerSignalImage,
       onPointerPanZoomStart: inputModel.onPointerPanZoomStart,
       onPointerPanZoomUpdate: inputModel.onPointerPanZoomUpdate,

@@ -136,6 +136,7 @@ class _RemotePageState extends State<RemotePage>
   late FFI _ffi;
   MobileVideoQuality? _videoQuality;
   RemoteWindowFocus? _windowFocus;
+  DesktopFocusTitlebarDrag? _focusTitlebarDrag;
   StreamSubscription<DesktopTabState>? _windowFocusTabSubscription;
   Worker? _waylandKeyboardModeWorker;
   bool _waylandKeyboardModeNormalized = false;
@@ -152,7 +153,9 @@ class _RemotePageState extends State<RemotePage>
     final focus = _windowFocus;
     if (focus == null || !_isSelectedTab) return;
     final selected = focus.selected;
-    stateGlobal.setWindowFocusHideTabBar(selected != null && !selected.minimized);
+    final active = selected != null && !selected.minimized;
+    if (!active) _focusTitlebarDrag?.reset();
+    stateGlobal.setWindowFocusHideTabBar(active);
   }
 
   void _initStates(String id) {
@@ -169,6 +172,10 @@ class _RemotePageState extends State<RemotePage>
     _videoQuality = createDesktopVideoQuality();
     _windowFocus = createDesktopWindowFocus(_ffi);
     if (_windowFocus != null) {
+      _focusTitlebarDrag = DesktopFocusTitlebarDrag(
+        ffi: _ffi,
+        focus: _windowFocus!,
+      );
       _windowFocus!.addListener(_syncWindowFocusTabBar);
       _windowFocusTabSubscription =
           widget.tabController?.state.listen((_) => _syncWindowFocusTabBar());
@@ -505,6 +512,7 @@ class _RemotePageState extends State<RemotePage>
   @override
   void onWindowBlur() {
     super.onWindowBlur();
+    _focusTitlebarDrag?.reset();
     // On windows, we use `focus` way to handle keyboard better.
     // Now on Linux, there's some rdev issues which will break the input.
     // We disable the `focus` way for Linux temporarily.
@@ -700,6 +708,7 @@ class _RemotePageState extends State<RemotePage>
     _pointerLockCenterDebounceTimer = null;
     _windowFocusTabSubscription?.cancel();
     _windowFocus?.removeListener(_syncWindowFocusTabBar);
+    _focusTitlebarDrag?.reset();
     if (_windowFocus?.selected != null) {
       stateGlobal.setWindowFocusHideTabBar(false);
     }
@@ -988,6 +997,9 @@ class _RemotePageState extends State<RemotePage>
           _rawKeyFocusNode.requestFocus();
         }
       },
+      onInterceptPointer: onEnter != null && onExit != null
+          ? _focusTitlebarDrag?.handlePointer
+          : null,
       inputModel: _ffi.inputModel,
       child: child,
     );

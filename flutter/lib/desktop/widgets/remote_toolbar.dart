@@ -3739,7 +3739,8 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
         _buildDraggable(context),
         if (!isWebDesktop && !kUseCompatibleUiMode)
           Obx(() => Offstage(
-                offstage: hideTabBar.isFalse || isFullscreen.isTrue,
+                offstage:
+                    hideTabBar.isFalse || collapse.isTrue || isFullscreen.isTrue,
                 child: buildWindowDragHandle(),
               )),
         Obx(() => collapse.isTrue
@@ -3762,7 +3763,8 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
             )),
         if (!isMacOS && !isWebDesktop && !kUseCompatibleUiMode)
           Obx(() => Offstage(
-                offstage: isFullscreen.isFalse && hideTabBar.isFalse,
+                offstage:
+                    isFullscreen.isFalse && (hideTabBar.isFalse || collapse.isTrue),
                 child: buttonWrapper(
                   widget.setMinimize,
                   Tooltip(
@@ -3776,7 +3778,8 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
               )),
         if (!isMacOS && !isWebDesktop && !kUseCompatibleUiMode)
           Obx(() => Offstage(
-                offstage: hideTabBar.isFalse || isFullscreen.isTrue,
+                offstage:
+                    hideTabBar.isFalse || collapse.isTrue || isFullscreen.isTrue,
                 child: buttonWrapper(
                   toggleWindowMaximize,
                   Tooltip(
@@ -3809,7 +3812,7 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
         ),
         if (!isMacOS && !isWebDesktop && !kUseCompatibleUiMode)
           Obx(() => Offstage(
-                offstage: hideTabBar.isFalse,
+                offstage: hideTabBar.isFalse || collapse.isTrue,
                 child: buttonWrapper(
                   () async {
                     if (await showConnEndAuditDialogCloseCanceled(

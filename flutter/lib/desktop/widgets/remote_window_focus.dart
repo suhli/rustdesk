@@ -1,5 +1,8 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +12,7 @@ import '../../consts.dart';
 import '../../mobile/widgets/mobile_video_quality.dart';
 import '../../mobile/widgets/remote_window_focus.dart';
 import '../../models/model.dart';
+import '../../models/state_model.dart';
 import '../../models/window_focus_geometry.dart';
 
 const desktopVideoQualityOption = 'desktop-video-quality';
@@ -279,4 +283,158 @@ class DesktopFocusedCursorPainter extends CustomPainter {
       hotspot != old.hotspot ||
       zoomCursor != old.zoomCursor ||
       geometry != old.geometry;
+}
+
+class DesktopFocusTitlebarDrag {
+  DesktopFocusTitlebarDrag({
+    required this.ffi,
+    required this.focus,
+    VoidCallback? startLocalDrag,
+    VoidCallback? endLocalDrag,
+    void Function(PointerDownEvent)? replayPointerDown,
+    bool Function()? isFullscreen,
+  })  : _startLocalDrag = startLocalDrag ?? _defaultStartLocalDrag,
+        _endLocalDrag = endLocalDrag ?? _defaultEndLocalDrag,
+        _replayPointerDown = replayPointerDown ?? ffi.inputModel.onPointDownImage,
+        _isFullscreen = isFullscreen ?? (() => stateGlobal.fullscreen.isTrue);
+
+  static const double titlebarHeightPx = 40.0;
+  static const double captionButtonsWidthPx = 144.0;
+  static const double dragThresholdPx = 4.0;
+
+  final FFI ffi;
+  final RemoteWindowFocus focus;
+  final VoidCallback _startLocalDrag;
+  final VoidCallback _endLocalDrag;
+  final void Function(PointerDownEvent) _replayPointerDown;
+  final bool Function() _isFullscreen;
+
+  PointerDownEvent? _pendingDown;
+  bool _draggingLocalWindow = false;
+
+  static void _defaultStartLocalDrag() {
+    WindowController.fromWindowId(stateGlobal.windowId).startDragging();
+  }
+
+  static void _defaultEndLocalDrag() {
+    if (isMacOS) {
+      WindowController.fromWindowId(stateGlobal.windowId).setMovable(false);
+    }
+  }
+
+  static bool isInTitlebarDragZone(
+    Offset remotePoint,
+    Rect windowRect, {
+    double displayScale = 1.0,
+  }) {
+    if (windowRect.isEmpty) return false;
+    final scale = displayScale >= 1.0 ? displayScale : 1.0;
+    final titlebarHeight =
+        math.min(titlebarHeightPx * scale, windowRect.height * 0.25);
+    final buttonsWidth =
+        math.min(captionButtonsWidthPx * scale, windowRect.width * 0.35);
+    final relX = remotePoint.dx - windowRect.left;
+    final relY = remotePoint.dy - windowRect.top;
+    return relY >= 0 &&
+        relY <= titlebarHeight &&
+        relX >= 0 &&
+        relX < windowRect.width - buttonsWidth;
+  }
+
+  bool handlePointer(PointerEvent event) {
+    if (event is PointerDownEvent) {
+      return _handleDown(event);
+    }
+    if (event is PointerMoveEvent) {
+      return _handleMove(event);
+    }
+    if (event is PointerUpEvent) {
+      return _handleUp(event);
+    }
+    if (event is PointerCancelEvent) {
+      return _handleCancel(event);
+    }
+    return false;
+  }
+
+  bool _handleDown(PointerDownEvent event) {
+    reset();
+    if (_isFullscreen()) return false;
+    final chosen = focus.selected;
+    final geometry = ffi.canvasModel.windowFocus;
+    if (chosen == null || chosen.minimized || geometry == null) return false;
+    final input = ffi.inputModel;
+    if (input.relativeMouseMode.value ||
+        input.ctrl ||
+        input.alt ||
+        input.shift ||
+        input.command) {
+      return false;
+    }
+    if (event.kind != PointerDeviceKind.mouse ||
+        event.buttons != kPrimaryMouseButton) {
+      return false;
+    }
+    final local = Offset(
+      event.position.dx - CanvasModel.leftToEdge,
+      event.position.dy - CanvasModel.topToEdge,
+    );
+    final remote = geometry.localToDesktop(local);
+    if (remote == null) return false;
+    final pi = ffi.ffiModel.pi;
+    final displayScale = pi.scaleOfDisplay(pi.currentDisplay);
+    if (!isInTitlebarDragZone(remote, chosen.rect,
+        displayScale: displayScale)) {
+      return false;
+    }
+    _pendingDown = event;
+    return true;
+  }
+
+  bool _handleMove(PointerMoveEvent event) {
+    if (_draggingLocalWindow) return true;
+    final pending = _pendingDown;
+    if (pending == null || event.pointer != pending.pointer) return false;
+    if ((event.position - pending.position).distance < dragThresholdPx) {
+      return true;
+    }
+    _pendingDown = null;
+    _draggingLocalWindow = true;
+    _startLocalDrag();
+    return true;
+  }
+
+  bool _handleUp(PointerUpEvent event) {
+    if (_draggingLocalWindow) {
+      _draggingLocalWindow = false;
+      _endLocalDrag();
+      return true;
+    }
+    final pending = _pendingDown;
+    if (pending == null || event.pointer != pending.pointer) return false;
+    _pendingDown = null;
+    _replayPointerDown(pending);
+    return false;
+  }
+
+  bool _handleCancel(PointerCancelEvent event) {
+    if (_draggingLocalWindow) {
+      _draggingLocalWindow = false;
+      _endLocalDrag();
+      return true;
+    }
+    if (_pendingDown != null && event.pointer == _pendingDown!.pointer) {
+      _pendingDown = null;
+      return true;
+    }
+    return false;
+  }
+
+  void reset() {
+    _pendingDown = null;
+    if (_draggingLocalWindow) {
+      _draggingLocalWindow = false;
+      _endLocalDrag();
+    }
+  }
 }
